@@ -5,6 +5,8 @@ export default {
     cancel: 'Cancel',
     save: 'Save',
     or: 'OR',
+    language: 'Language',
+    switchedTo: 'Switched to',
   },
   auth: {
     login: 'Login',
@@ -57,6 +59,9 @@ export default {
     privacy: 'Privacy',
     help: 'Help & Support',
     logout: 'Logout',
+  },
+  settings: {
+    appLanguage: 'App Language',
   },
   chat: {
     title: 'Chat',

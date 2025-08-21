@@ -19,6 +19,7 @@ import { useTranslate } from "@/contexts/TranslateContext";
 import UpgradeModal from "@/components/UpgradeModal";
 import { useMembership } from "@/contexts/MembershipContext";
 import { supportedLocales, type SupportedLocale } from "@/lib/i18n";
+import { showToast } from "@/lib/toast";
 import { useI18n } from "@/contexts/I18nContext";
 
 const { width } = Dimensions.get('window');
@@ -183,7 +184,7 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Profile</Text>
+        <Text style={styles.headerTitle}>{useI18n().t('profile.header')}</Text>
         <TouchableOpacity style={styles.settingsButton} onPress={() => router.push("/(tabs)/settings" as any)} testID="open-settings">
           <Settings color="#333" size={24} />
         </TouchableOpacity>
@@ -210,14 +211,14 @@ export default function ProfileScreen() {
             onPress={() => setActiveTab('profile')}
             testID="tab-profile"
           >
-            <Text style={[styles.tabBtnText, activeTab === 'profile' ? styles.tabBtnTextActive : undefined]}>Profile</Text>
+            <Text style={[styles.tabBtnText, activeTab === 'profile' ? styles.tabBtnTextActive : undefined]}>{useI18n().t('profile.header')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tabBtn, activeTab === 'language' ? styles.tabBtnActive : undefined]}
             onPress={() => setActiveTab('language')}
             testID="tab-language"
           >
-            <Text style={[styles.tabBtnText, activeTab === 'language' ? styles.tabBtnTextActive : undefined]}>Language</Text>
+            <Text style={[styles.tabBtnText, activeTab === 'language' ? styles.tabBtnTextActive : undefined]}>{useI18n().t('common.language') ?? 'Language'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -254,7 +255,7 @@ export default function ProfileScreen() {
           <View style={styles.languageSection}>
             <View style={styles.appLangHeader}>
               <Globe color="#111827" size={18} />
-              <Text style={styles.langTitle}>App Language</Text>
+              <Text style={styles.langTitle}>{useI18n().t('settings.appLanguage') ?? 'App Language'}</Text>
             </View>
             <View style={styles.segmented}>
               {(Object.entries(supportedLocales) as [SupportedLocale, string][]).map(([code, label]) => {
@@ -263,7 +264,7 @@ export default function ProfileScreen() {
                 return (
                   <TouchableOpacity
                     key={`seg-${code}`}
-                    onPress={() => setLocale(code)}
+                    onPress={() => { setLocale(code); const name = (supportedLocales as Record<SupportedLocale, string>)[code]; showToast(`${useI18n().t('common.switchedTo') ?? 'Switched to'} ${name}!`); }}
                     style={[styles.segBtn, active && styles.segBtnActive]}
                     testID={`profile-app-lang-${code}`}
                   >

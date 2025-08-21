@@ -7,6 +7,7 @@ import { supportedLocales, SupportedLocale } from '@/lib/i18n';
 import { useMembership } from '@/contexts/MembershipContext';
 import { openBillingPortal } from '@/lib/payments';
 import { useI18n } from '@/contexts/I18nContext';
+import { showToast } from '@/lib/toast';
 import { backend, VerificationModePref, CaptureChoice } from '@/lib/backend';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -166,7 +167,7 @@ export default function SettingsScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: 'Settings' }} />
+      <Stack.Screen options={{ title: useI18n().t('profile.settings') ?? 'Settings' }} />
 
       {offline ? (
         <View style={styles.offlineBar} testID="offline-bar">
@@ -190,7 +191,7 @@ export default function SettingsScreen() {
               <TouchableOpacity
                 key={`app-${code}`}
                 style={[styles.langItem, active && styles.langItemActive]}
-                onPress={() => setLocale(code)}
+                onPress={() => { setLocale(code); const name = (supportedLocales as Record<SupportedLocale, string>)[code]; showToast(`${useI18n().t('common.switchedTo') ?? 'Switched to'} ${name}!`); }}
                 testID={`app-lang-${code}`}
               >
                 <Text style={[styles.langText, active && styles.langTextActive]}>

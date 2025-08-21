@@ -52,6 +52,10 @@ export default function ProfileScreen() {
   const { translate, targetLang, enabled, setTargetLang, setEnabled } = useTranslate();
   const { tier } = useMembership();
   const { locale, setLocale, t } = useI18n();
+  const headerTitleStr = useMemo(() => t('profile.header'), [t]);
+  const tabLanguageStr = useMemo(() => t('common.language') ?? 'Language', [t]);
+  const appLanguageTitle = useMemo(() => t('settings.appLanguage') ?? 'App Language', [t]);
+  const switchedToText = useMemo(() => t('common.switchedTo') ?? 'Switched to', [t]);
   const mountedRef = useRef<boolean>(false);
   const [bioTranslated, setBioTranslated] = useState<string | undefined>(undefined);
   const [bioDetected, setBioDetected] = useState<string>("");
@@ -183,7 +187,7 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>{t('profile.header')}</Text>
+        <Text style={styles.headerTitle}>{headerTitleStr}</Text>
         <TouchableOpacity style={styles.settingsButton} onPress={() => router.push("/(tabs)/settings" as any)} testID="open-settings">
           <Settings color="#333" size={24} />
         </TouchableOpacity>
@@ -221,7 +225,7 @@ export default function ProfileScreen() {
                 onPress={() => setActiveTab('language')}
                 testID="tab-language"
               >
-                <Text style={[styles.tabBtnText, activeTab === 'language' ? styles.tabBtnTextActive : undefined]}>{t('common.language') ?? 'Language'}</Text>
+                <Text style={[styles.tabBtnText, activeTab === 'language' ? styles.tabBtnTextActive : undefined]}>{tabLanguageStr}</Text>
               </TouchableOpacity>
             </View>
 
@@ -258,7 +262,7 @@ export default function ProfileScreen() {
               <View style={styles.languageSection}>
                 <View style={styles.appLangHeader}>
                   <Globe color="#111827" size={18} />
-                  <Text style={styles.langTitle}>{t('settings.appLanguage') ?? 'App Language'}</Text>
+                  <Text style={styles.langTitle}>{appLanguageTitle}</Text>
                 </View>
                 <View style={styles.segmented}>
                   {(Object.entries(supportedLocales) as [SupportedLocale, string][]).map(([code, label]) => {
@@ -267,7 +271,7 @@ export default function ProfileScreen() {
                     return (
                       <TouchableOpacity
                         key={`seg-${code}`}
-                        onPress={() => { setLocale(code); const name = (supportedLocales as Record<SupportedLocale, string>)[code]; showToast(`${t('common.switchedTo') ?? 'Switched to'} ${name}!`); }}
+                        onPress={() => { setLocale(code); const name = (supportedLocales as Record<SupportedLocale, string>)[code]; showToast(`${switchedToText} ${name}!`); }}
                         style={[styles.segBtn, active && styles.segBtnActive]}
                         testID={`profile-app-lang-${code}`}
                       >

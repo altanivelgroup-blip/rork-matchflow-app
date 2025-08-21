@@ -1,8 +1,8 @@
 import createContextHook from '@nkzw/create-context-hook';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert, Platform } from 'react-native';
 import { i18n, SupportedLocale, supportedLocales, detectDeviceLocale } from '@/lib/i18n';
+import { showToast } from '@/lib/toast';
 
 interface I18nContextType {
   locale: SupportedLocale;
@@ -52,35 +52,34 @@ export const [I18nProvider, useI18n] = createContextHook<I18nContextType>(() => 
     if (mountedRef.current) persist();
   }, [locale]);
 
-  const setLocale = (l: SupportedLocale) => {
+  const setLocale = useCallback((l: SupportedLocale) => {
     try {
       const hasTranslations = Boolean((i18n.translations as any)?.[l]);
       if (!hasTranslations) {
         i18n.locale = 'en';
         setLocaleState('en');
-        Alert.alert('Language', 'Translations not available, falling back to English');
+        showToast('Translations not available, falling back to English');
         return;
       }
       i18n.locale = l;
       setLocaleState(l);
       const label = supportedLocales[l] ?? l;
-      const msg = Platform.OS === 'web' ? `Language changed to ${label}` : `Language changed to ${label}`;
-      Alert.alert('Language', msg);
+      showToast(`Language changed to ${label}`);
     } catch (e) {
       i18n.locale = 'en';
       setLocaleState('en');
-      Alert.alert('Language', 'Error switching language. Falling back to English');
+      showToast('Error switching language. Falling back to English');
     }
-  };
+  }, []);
 
-  const t = (scope: string, options?: Record<string, unknown>) => i18n.t(scope as any, options);
+  const t = useCallback((scope: string, options?: Record<string, unknown>) => i18n.t(scope as any, options), []);
 
   const value: I18nContextType = useMemo(() => ({
     locale,
     setLocale,
     t,
     supported: supportedLocales,
-  }), [locale]);
+  }), [locale, setLocale, t]);
 
   return value;
 }, defaultValue);

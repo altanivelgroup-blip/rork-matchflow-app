@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useMemo, useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -44,11 +44,31 @@ function TrianglePlayIcon() {
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const { media, pickFromLibrary, capturePhoto, captureVideo, removeItem, setPrimary } = useMedia();
-  const { translate, targetLang } = useTranslate();
+  const { translate, targetLang, enabled } = useTranslate();
   const [bioTranslated, setBioTranslated] = useState<string | undefined>(undefined);
   const [bioDetected, setBioDetected] = useState<string>("");
   const [showTranslated, setShowTranslated] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    const run = async () => {
+      const bio = user?.bio ?? '';
+      if (!enabled || !bio) return;
+      if (bioTranslated) return;
+      try {
+        setLoading(true);
+        const res = await translate(bio);
+        setBioTranslated(res.translated);
+        setBioDetected(String(res.detectedLang));
+        setShowTranslated(true);
+      } catch (e) {
+        console.log('[Profile] auto translate bio error', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    run();
+  }, [enabled, translate, user?.bio, bioTranslated]);
 
   const handleTranslateBio = useCallback(async () => {
     const bio = user?.bio ?? '';
@@ -116,7 +136,7 @@ export default function ProfileScreen() {
           <View style={styles.translateRow}>
             <TouchableOpacity style={styles.translatePill} onPress={handleTranslateBio} testID="translate-bio">
               <Languages color={showTranslated ? '#10B981' : '#2563EB'} size={16} />
-              <Text style={[styles.translateText, { color: showTranslated ? '#10B981' : '#2563EB' }]}>{loading ? 'Translating…' : showTranslated ? 'Show original' : 'AI Translate'}</Text>
+              <Text style={[styles.translateText, { color: showTranslated ? '#10B981' : '#2563EB' }]}>{loading ? 'Translating…' : showTranslated ? 'Show original' : (enabled ? 'Show translation' : 'AI Translate')}</Text>
             </TouchableOpacity>
             {bioTranslated && bioTranslated !== (user?.bio ?? '') ? (
               <Text style={styles.translateMeta}>{`AI (${bioDetected}) → ${targetLang}`}</Text>

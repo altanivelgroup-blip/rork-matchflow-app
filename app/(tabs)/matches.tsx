@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import { useTranslate } from "@/contexts/TranslateContext";
 
 export default function MatchesScreen() {
   const { matches } = useMatches();
-  const { translate, targetLang } = useTranslate();
+  const { translate, targetLang, enabled } = useTranslate();
   const [translatedMap, setTranslatedMap] = useState<Record<string, { text: string; detected: string }>>({});
   const [showTranslated, setShowTranslated] = useState<Record<string, boolean>>({});
   const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
@@ -44,6 +44,30 @@ export default function MatchesScreen() {
 
   const listData = useMemo(() => matches, [matches]);
 
+  useEffect(() => {
+    if (!enabled) return;
+    const run = async () => {
+      try {
+        const toProcess = listData.filter((m) => {
+          const existing = translatedMap[m.id]?.text;
+          return !!m.bio && !existing;
+        });
+        for (const m of toProcess) {
+          try {
+            const res = await translate(m.bio);
+            setTranslatedMap((p) => ({ ...p, [m.id]: { text: res.translated, detected: String(res.detectedLang) } }));
+            setShowTranslated((p) => ({ ...p, [m.id]: true }));
+          } catch (e) {
+            console.log('[Matches] auto translate error', e);
+          }
+        }
+      } catch (e) {
+        console.log('[Matches] auto translate loop error', e);
+      }
+    };
+    run();
+  }, [enabled, listData, translate]);
+
   const renderMatch = ({ item }: { item: typeof matches[0] }) => {
     const t = translatedMap[item.id]?.text;
     const detected = translatedMap[item.id]?.detected ?? '';
@@ -68,7 +92,7 @@ export default function MatchesScreen() {
             >
               <Languages color={showing ? '#44D884' : '#2563EB'} size={14} />
               <Text style={[styles.translateText, { color: showing ? '#10B981' : '#2563EB' }]}>
-                {loading ? 'Translating…' : showing ? 'Show original' : 'AI Translate'}
+                {loading ? 'Translating…' : showing ? 'Show original' : (enabled ? 'Show translation' : 'AI Translate')}
               </Text>
             </TouchableOpacity>
             {t && t !== item.bio ? (

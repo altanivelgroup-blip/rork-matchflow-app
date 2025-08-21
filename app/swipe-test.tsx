@@ -1,11 +1,13 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, Animated, Dimensions } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, Animated, Dimensions, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { backend } from '@/lib/backend';
 import { useAuth } from '@/contexts/AuthContext';
 import { mockProfiles, type MockProfile } from '@/mocks/profiles';
-import { MessageCircle } from 'lucide-react-native';
+import { MessageCircle, Sparkles } from 'lucide-react-native';
 import { router, Stack } from 'expo-router';
+import MatchCelebration from '@/components/MatchCelebration';
+import { scoreProfilesAgainstUser, type AiUserProfileInput } from '@/lib/aiMatch';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -15,9 +17,27 @@ export default function SwipeTest() {
 
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [matchModal, setMatchModal] = useState<{ visible: boolean; profile: MockProfile | null }>({ visible: false, profile: null });
+  const [celebration, setCelebration] = useState<{ visible: boolean; intensity: number; theme: 'confetti' | 'hearts' | 'fireworks'; message: string }>({ visible: false, intensity: 0.7, theme: 'hearts', message: "Boom! It's a Match!" });
+  const [animationsEnabled, setAnimationsEnabled] = useState<boolean>(true);
   const position = useRef(new Animated.ValueXY()).current;
 
   const deck = useMemo<MockProfile[]>(() => mockProfiles.slice(0, 3), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const s = await backend.fetchUserSettings(uid);
+        if (!cancelled && s && typeof s.matchAnimationsEnabled === 'boolean') {
+          setAnimationsEnabled(s.matchAnimationsEnabled);
+        }
+      } catch (e) {
+        console.log('[SwipeTest] load settings error', e);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [uid]);
 
   const resetCard = () => {
     setCurrentIndex((i) => Math.min(i + 1, deck.length - 1));
@@ -31,24 +51,51 @@ export default function SwipeTest() {
     Animated.timing(position, { toValue: { x: -screenWidth, y: 0 }, duration: 180, useNativeDriver: false }).start(() => resetCard());
   }, [currentIndex, deck, position, uid]);
 
+  const openCelebration = useCallback((score: number, name: string) => {
+    const intensity = Math.max(0.3, Math.min(1, score / 100));
+    const theme = score >= 80 ? 'fireworks' : score >= 60 ? 'hearts' : 'confetti';
+    const msg = `Boom! It's a Match${name ? ` with ${name}` : ''}!`;
+    setCelebration({ visible: true, intensity, theme, message: msg });
+    setTimeout(() => setCelebration((c) => ({ ...c, visible: false })), 2000 + Math.floor(800 * intensity));
+  }, []);
+
   const simulateRight = useCallback(async () => {
     const p = deck[currentIndex];
     if (!p) return;
     const res = await backend.recordLike(uid, p.id);
     if (res.mutual) {
+      try {
+        const me: AiUserProfileInput = { id: uid, name: uid, age: 28, interests: ['Music', 'Travel', 'Food'], location: { lat: 37.7749, lon: -122.4194, city: 'San Francisco' } };
+        const scored = await scoreProfilesAgainstUser(me, [{ id: p.id, name: p.name, age: p.age, interests: p.interests, location: p.location } as AiUserProfileInput]);
+        const score = scored.scores[0]?.score ?? 65;
+        if (animationsEnabled) openCelebration(score, p.name);
+      } catch (e) {
+        console.log('[SwipeTest] scoring error', e);
+        if (animationsEnabled) openCelebration(65, p.name);
+      }
       setMatchModal({ visible: true, profile: p });
     }
     Animated.timing(position, { toValue: { x: screenWidth, y: 0 }, duration: 180, useNativeDriver: false }).start(() => resetCard());
-  }, [currentIndex, deck, position, uid]);
+  }, [animationsEnabled, currentIndex, deck, openCelebration, position, uid]);
 
   const forceMutual = useCallback(async () => {
     const p = deck[currentIndex];
     if (!p) return;
-    // Simulate the other user liking you
     await backend.recordLike(p.id, uid);
     const res = await backend.recordLike(uid, p.id);
-    if (res.mutual) setMatchModal({ visible: true, profile: p });
-  }, [currentIndex, deck, uid]);
+    if (res.mutual) {
+      try {
+        const me: AiUserProfileInput = { id: uid, name: uid, age: 28, interests: ['Music', 'Travel', 'Food'], location: { lat: 37.7749, lon: -122.4194, city: 'San Francisco' } };
+        const scored = await scoreProfilesAgainstUser(me, [{ id: p.id, name: p.name, age: p.age, interests: p.interests, location: p.location } as AiUserProfileInput]);
+        const score = scored.scores[0]?.score ?? 80;
+        if (animationsEnabled) openCelebration(score, p.name);
+      } catch (e) {
+        console.log('[SwipeTest] scoring error', e);
+        if (animationsEnabled) openCelebration(80, p.name);
+      }
+      setMatchModal({ visible: true, profile: p });
+    }
+  }, [animationsEnabled, currentIndex, deck, openCelebration, uid]);
 
   const p = deck[currentIndex];
 
@@ -90,6 +137,25 @@ export default function SwipeTest() {
         </TouchableOpacity>
       </View>
 
+      <View style={styles.row}>
+        <TouchableOpacity
+          onPress={() => setCelebration({ visible: true, intensity: 0.5, theme: 'confetti', message: "Test: Boom! It's a Match!" })}
+          style={[styles.btn, { backgroundColor: '#8B5CF6' }]}
+          testID="play-celebration-50"
+        >
+          <Sparkles color="#fff" size={16} />
+          <Text style={[styles.btnText, { marginLeft: 8 }]}>Play 50%</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setCelebration({ visible: true, intensity: 0.95, theme: 'fireworks', message: "Test: Boom! It's a Match!" })}
+          style={[styles.btn, { backgroundColor: '#F59E0B' }]}
+          testID="play-celebration-95"
+        >
+          <Sparkles color="#fff" size={16} />
+          <Text style={[styles.btnText, { marginLeft: 8 }]}>Play 95%</Text>
+        </TouchableOpacity>
+      </View>
+
       <Modal transparent visible={matchModal.visible} animationType="fade" onRequestClose={() => setMatchModal({ visible: false, profile: null })}>
         <View style={styles.modalBackdrop}>
           <View style={styles.matchCard} testID="match-modal-test">
@@ -124,6 +190,16 @@ export default function SwipeTest() {
           </View>
         </View>
       </Modal>
+
+      {animationsEnabled && (
+        <MatchCelebration
+          visible={celebration.visible}
+          intensity={celebration.intensity}
+          theme={celebration.theme}
+          message={celebration.message}
+          onDone={() => setCelebration((c) => ({ ...c, visible: false }))}
+        />
+      )}
     </SafeAreaView>
   );
 }

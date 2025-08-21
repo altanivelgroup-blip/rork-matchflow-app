@@ -28,6 +28,7 @@ export default function SignupScreen() {
   const [confirmPassword, setConfirmPassword] = useState<string>("");
   const [age, setAge] = useState<string>("");
   const [gender, setGender] = useState<string>("");
+  const [showGenderPicker, setShowGenderPicker] = useState<boolean>(false);
   const [locationText, setLocationText] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [pendingLocale, setPendingLocale] = useState<SupportedLocale | null>(null);
@@ -40,6 +41,13 @@ export default function SignupScreen() {
 
   const emailValid = useMemo(() => /[^@\s]+@[^@\s]+\.[^@\s]+/.test(email), [email]);
   const passwordStrong = useMemo(() => password.length >= 6, [password]);
+  const ageValid = useMemo(() => {
+    const ageNum = Number(age);
+    return ageNum >= 18 && ageNum <= 100;
+  }, [age]);
+  const nameValid = useMemo(() => name.trim().length >= 2, [name]);
+  
+  const genderOptions = ['Male', 'Female', 'Non-binary', 'Other', 'Prefer not to say'];
 
   const preflightLocation = async () => {
     try {
@@ -54,29 +62,53 @@ export default function SignupScreen() {
   };
 
   const handleSignup = async () => {
-    if (!name || !email || !password || !confirmPassword || !age || !gender) {
-      Alert.alert('Missing info', 'Please fill all fields.');
+    // Validation
+    if (!nameValid) {
+      Alert.alert(i18nProxy.t('errors.invalidName') ?? 'Invalid name', 'Name must be at least 2 characters long.');
       return;
     }
     if (!emailValid) {
       Alert.alert(i18nProxy.t('errors.invalidEmail') ?? 'Invalid email address');
       return;
     }
+    if (!passwordStrong) {
+      Alert.alert(i18nProxy.t('errors.weakPassword') ?? 'Weak password', 'Password must be at least 6 characters long.');
+      return;
+    }
     if (password !== confirmPassword) {
       Alert.alert(i18nProxy.t('errors.passwordsNoMatch') ?? 'Passwords do not match.');
       return;
     }
-    if (!passwordStrong) {
-      Alert.alert('Weak password', 'Use at least 6 characters');
+    if (!ageValid) {
+      Alert.alert(i18nProxy.t('errors.invalidAge') ?? 'Invalid age', 'You must be between 18 and 100 years old.');
       return;
     }
+    if (!gender) {
+      Alert.alert(i18nProxy.t('errors.missingGender') ?? 'Missing gender', 'Please select your gender.');
+      return;
+    }
+    
     setLoading(true);
     await preflightLocation();
     try {
-      await AsyncStorage.setItem('signup:basic', JSON.stringify({ name, email, age: Number(age) || undefined, gender, locationText }));
+      // Store signup data for later use
+      const signupData = {
+        name: name.trim(),
+        email: email.toLowerCase().trim(),
+        password, // In real app, this would be hashed
+        age: Number(age),
+        gender,
+        locationText: locationText.trim(),
+        signupTimestamp: Date.now()
+      };
+      
+      await AsyncStorage.setItem('signup:basic', JSON.stringify(signupData));
+      
+      // Navigate to photo verification
       router.push("/verify-photo" as any);
     } catch (e) {
-      Alert.alert('Error', 'Unable to proceed.');
+      console.log('[Signup] error:', e);
+      Alert.alert(i18nProxy.t('errors.signupFailed') ?? 'Signup failed', i18nProxy.t('errors.tryAgain') ?? 'Please try again.');
     } finally {
       setLoading(false);
     }
@@ -133,19 +165,32 @@ export default function SignupScreen() {
                 <TextInput style={styles.input} placeholder={i18nProxy.t('profileSetup.agePlaceholder') ?? 'Age'} placeholderTextColor="#999" value={age} onChangeText={setAge} keyboardType="number-pad" />
               </View>
 
-              <View style={styles.inputRow}>
+              <TouchableOpacity 
+                style={styles.inputRow} 
+                onPress={() => setShowGenderPicker(true)}
+                testID="gender-picker"
+              >
                 <IdCard color="#999" size={18} />
-                <TextInput style={styles.input} placeholder="Gender" placeholderTextColor="#999" value={gender} onChangeText={setGender} />
-              </View>
+                <Text style={[styles.input, { paddingVertical: 15 }, !gender && { color: '#999' }]}>
+                  {gender || 'Select Gender'}
+                </Text>
+              </TouchableOpacity>
 
               <View style={styles.inputRow}>
                 <MapPin color="#999" size={18} />
                 <TextInput style={styles.input} placeholder="Location (City)" placeholderTextColor="#999" value={locationText} onChangeText={setLocationText} />
               </View>
 
-              <TouchableOpacity style={[styles.signupButton, loading ? styles.signupDisabled : undefined]} onPress={handleSignup} testID="signup-button" disabled={loading}>
+              <TouchableOpacity 
+                style={[styles.signupButton, loading ? styles.signupDisabled : undefined]} 
+                onPress={handleSignup} 
+                testID="signup-button" 
+                disabled={loading}
+              >
                 {loading ? <ActivityIndicator color="#fff" /> : null}
-                <Text style={styles.signupButtonText}>Continue</Text>
+                <Text style={styles.signupButtonText}>
+                  {i18nProxy.t('auth.continueToVerification') ?? 'Continue to Verification'}
+                </Text>
               </TouchableOpacity>
 
               <View style={styles.termsContainer}>
@@ -157,6 +202,37 @@ export default function SignupScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      
+      {/* Gender Picker Modal */}
+      {showGenderPicker && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Gender</Text>
+            {genderOptions.map((option) => (
+              <TouchableOpacity
+                key={option}
+                style={[styles.genderOption, gender === option && styles.genderOptionSelected]}
+                onPress={() => {
+                  setGender(option);
+                  setShowGenderPicker(false);
+                }}
+                testID={`gender-${option.toLowerCase().replace(/\s+/g, '-')}`}
+              >
+                <Text style={[styles.genderOptionText, gender === option && styles.genderOptionTextSelected]}>
+                  {option}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={styles.modalCancel}
+              onPress={() => setShowGenderPicker(false)}
+            >
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+      
       <LanguageSwitchConfirm
         visible={confirmVisible}
         selectedLabel={pendingLocale ? supportedLocales[pendingLocale] : ''}
@@ -198,4 +274,13 @@ const styles = StyleSheet.create({
   termsContainer: { marginTop: 20, paddingHorizontal: 10 },
   termsText: { fontSize: 12, color: "#666", textAlign: "center", lineHeight: 18 },
   termsLink: { color: "#FF6B6B", fontWeight: "600" },
+  modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
+  modalContent: { backgroundColor: 'white', borderRadius: 20, padding: 20, width: '80%', maxWidth: 300 },
+  modalTitle: { fontSize: 18, fontWeight: '600', color: '#333', textAlign: 'center', marginBottom: 20 },
+  genderOption: { paddingVertical: 15, paddingHorizontal: 20, borderRadius: 10, marginBottom: 8, backgroundColor: '#F5F5F5' },
+  genderOptionSelected: { backgroundColor: '#FF6B6B' },
+  genderOptionText: { fontSize: 16, color: '#333', textAlign: 'center' },
+  genderOptionTextSelected: { color: 'white', fontWeight: '600' },
+  modalCancel: { marginTop: 10, paddingVertical: 12, alignItems: 'center' },
+  modalCancelText: { fontSize: 16, color: '#999' },
 });

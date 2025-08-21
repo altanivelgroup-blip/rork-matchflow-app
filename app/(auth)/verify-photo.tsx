@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Camera as CameraIcon, ArrowLeft, Timer as TimerIcon, RefreshCcw, CheckCircle2, ChevronRight, ShieldCheck, ShieldAlert, Crown, Image as ImageIcon, Webcam, ImageOff, Shuffle } from 'lucide-react-native';
+import { Camera as CameraIcon, ArrowLeft, Timer as TimerIcon, RefreshCcw, CheckCircle2, ChevronRight, ShieldCheck, ShieldAlert, Crown, Image as ImageIcon, Webcam, ImageOff, Shuffle, AlertCircle, User } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
@@ -235,20 +235,24 @@ export default function VerifyPhotoScreen() {
 
   const proceed = useCallback(async () => {
     if (!allReady) {
-      Alert.alert('Incomplete', 'Please capture all three photos to continue.');
+      Alert.alert(
+        'Incomplete Verification',
+        'Please capture all three photos (front, left, right) to continue with verification.',
+        [{ text: 'OK' }]
+      );
       return;
     }
 
     const result = await verifyPhotos();
     if (!result.ok) {
       const baseMsg = result.reason ?? 'Verification failed. Please try again.';
-      const friendly = `Photo doesn't seem real—try again! ${baseMsg}`.trim();
+      const friendly = `Verification failed: ${baseMsg}`;
       setVerificationError(friendly);
       Alert.alert(
-        'Verification failed',
+        'Verification Failed',
         friendly,
         [
-          { text: 'Retry with remaining time', onPress: () => {} },
+          { text: 'Retry with remaining time', onPress: () => setVerificationError(null) },
           { text: 'Restart 2‑min timer', style: 'destructive', onPress: resetAll },
         ]
       );
@@ -256,6 +260,7 @@ export default function VerifyPhotoScreen() {
     }
 
     try {
+      // Store verification data
       await AsyncStorage.setItem('verification_photos_v1', JSON.stringify(photos));
       await AsyncStorage.setItem('verification_passed_v1', 'true');
       if (typeof result.score === 'number') {
@@ -264,10 +269,25 @@ export default function VerifyPhotoScreen() {
       if (result.faceVector && Array.isArray(result.faceVector)) {
         await AsyncStorage.setItem('face_vector_v1', JSON.stringify(result.faceVector));
       }
+      
+      // Get signup data and create user account
+      const signupDataStr = await AsyncStorage.getItem('signup:basic');
+      if (signupDataStr) {
+        const signupData = JSON.parse(signupDataStr);
+        // In a real app, you would send this to your backend
+        console.log('[VerifyPhoto] User verified and ready for account creation:', {
+          ...signupData,
+          verificationScore: result.score,
+          verificationTimestamp: Date.now()
+        });
+      }
+      
+      // Navigate to profile setup
+      router.push('/(auth)/profile-setup' as any);
     } catch (e) {
       console.log('[VerifyPhoto] persist photos error', e);
+      Alert.alert('Error', 'Failed to save verification data. Please try again.');
     }
-    router.push('/(auth)/profile-setup' as any);
   }, [allReady, photos, resetAll, verifyPhotos]);
 
   const resetPose = useCallback((pose: PoseKey) => {
@@ -281,7 +301,7 @@ export default function VerifyPhotoScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()} testID="back-button">
           <ArrowLeft color="#333" size={24} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Real-time photo verification</Text>
+        <Text style={styles.headerTitle}>Photo Verification</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -298,7 +318,15 @@ export default function VerifyPhotoScreen() {
       ) : null}
 
       <View style={styles.body}>
-        <PrivacyNote text="We verify photos locally when possible. On web, basic face checks may use your browser's built‑in APIs. Images are not uploaded unless you proceed." />
+        <View style={styles.instructionCard}>
+          <User color="#FF6B6B" size={20} />
+          <Text style={styles.instructionTitle}>Face Verification Required</Text>
+          <Text style={styles.instructionText}>
+            Take 3 photos of yourself from different angles to verify your identity. This helps keep MatchFlow safe and authentic.
+          </Text>
+        </View>
+        
+        <PrivacyNote text="Photos are processed locally when possible. Your privacy is protected and images are only stored with your consent." />
         <View style={styles.modeBar}>
           <Shuffle color="#6B7280" size={16} />
           <Text style={styles.modeText}>Mode: {verificationMode === 'auto' ? 'Auto-switch' : verificationMode === 'manual' ? 'Manual' : 'Auto + Override'}</Text>
@@ -325,8 +353,24 @@ export default function VerifyPhotoScreen() {
             })}
           </View>
         ) : null}
-        <Text style={styles.stepTitle}>Step {currentPose === 'front' ? '1' : currentPose === 'left' ? '2' : '3'} of 3</Text>
-        <Text style={styles.instruction} testID="pose-instruction">{instruction}</Text>
+        <View style={styles.stepContainer}>
+          <Text style={styles.stepTitle}>Step {currentPose === 'front' ? '1' : currentPose === 'left' ? '2' : '3'} of 3</Text>
+          <Text style={styles.instruction} testID="pose-instruction">{instruction}</Text>
+          
+          {currentPose === 'front' && (
+            <View style={styles.tipCard}>
+              <AlertCircle color="#F59E0B" size={16} />
+              <Text style={styles.tipText}>Look directly at the camera with good lighting</Text>
+            </View>
+          )}
+          
+          {(currentPose === 'left' || currentPose === 'right') && (
+            <View style={styles.tipCard}>
+              <AlertCircle color="#F59E0B" size={16} />
+              <Text style={styles.tipText}>Turn your head while keeping shoulders visible</Text>
+            </View>
+          )}
+        </View>
 
         <View style={styles.slotsRow}>
           {(['front','left','right'] as PoseKey[]).map((pose) => {
@@ -451,8 +495,14 @@ const styles = StyleSheet.create({
   timerText: { marginLeft: 8, fontSize: 16, fontWeight: '700', color: '#FF6B6B' },
   fastLane: { flexDirection: 'row', alignSelf: 'center', alignItems: 'center', gap: 8, marginTop: 8, backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
   fastLaneText: { color: '#92400E', fontSize: 12, fontWeight: '800' },
-  stepTitle: { marginTop: 16, fontSize: 16, fontWeight: '700', color: '#333', alignSelf: 'center' },
+  stepContainer: { marginTop: 16, alignItems: 'center' },
+  stepTitle: { fontSize: 16, fontWeight: '700', color: '#333' },
   instruction: { marginTop: 6, fontSize: 14, color: '#666', textAlign: 'center' },
+  instructionCard: { backgroundColor: '#FFF4F4', borderRadius: 12, padding: 16, marginBottom: 16, alignItems: 'center' },
+  instructionTitle: { fontSize: 16, fontWeight: '600', color: '#333', marginTop: 8, marginBottom: 4 },
+  instructionText: { fontSize: 14, color: '#666', textAlign: 'center', lineHeight: 20 },
+  tipCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFBEB', borderRadius: 8, padding: 8, marginTop: 8, gap: 6 },
+  tipText: { fontSize: 12, color: '#92400E', flex: 1 },
   slotsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18 },
   slot: { flex: 1, height: 96, borderRadius: 14, borderWidth: 2, borderStyle: 'dashed', borderColor: '#EEE', marginHorizontal: 4, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FAFAFA' },
   slotActive: { borderColor: '#FFB3B3', backgroundColor: '#FFF4F4' },

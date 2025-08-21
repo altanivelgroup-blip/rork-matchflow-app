@@ -17,6 +17,7 @@ import { router } from "expo-router";
 import { Heart, Apple, Globe, Mail, Lock, LogIn, MountainSnow } from "lucide-react-native";
 import { useAuth } from "@/contexts/AuthContext";
 import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supportedLocales, type SupportedLocale } from "@/lib/i18n";
 import LanguageSwitchConfirm from '@/components/LanguageSwitchConfirm';
 import { useI18n } from '@/contexts/I18nContext';
@@ -43,11 +44,14 @@ export default function LoginScreen() {
       return;
     }
     if (!passwordStrong) {
-      Alert.alert('Weak password', 'Use at least 6 characters');
+      Alert.alert(i18nProxy.t('errors.weakPassword') ?? 'Password must be at least 6 characters');
       return;
     }
     setLoading(true);
     try {
+      // Check if user has completed verification
+      const verificationPassed = await AsyncStorage.getItem('verification_passed_v1');
+      
       let loc: { lat: number; lon: number; city?: string } | undefined;
       try {
         if (Platform.OS === 'web' && navigator.geolocation) {
@@ -65,10 +69,18 @@ export default function LoginScreen() {
       } catch (e) {
         console.log('[Login] location error', e);
       }
+      
       await login({ email, name: email.split("@")[0], location: loc });
-      router.replace("/(tabs)");
+      
+      // Redirect based on verification status
+      if (verificationPassed === 'true') {
+        router.replace("/(tabs)");
+      } else {
+        // User needs to complete verification flow
+        router.replace("/verify-photo" as any);
+      }
     } catch (e) {
-      Alert.alert('Sign in failed', 'Please try again.');
+      Alert.alert(i18nProxy.t('errors.loginFailed') ?? 'Sign in failed', i18nProxy.t('errors.tryAgain') ?? 'Please try again.');
     } finally {
       setLoading(false);
     }

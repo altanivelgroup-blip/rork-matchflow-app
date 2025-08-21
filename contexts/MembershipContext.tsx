@@ -44,8 +44,8 @@ function limitsFor(tier: MembershipTier): Limits {
   }
   return {
     dailySwipes: null,
-    maxPhotos: 12,
-    maxVideos: 6,
+    maxPhotos: null,
+    maxVideos: null,
     aiRecommendations: true,
     adsEnabled: false,
   };

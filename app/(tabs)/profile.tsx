@@ -16,6 +16,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useMedia } from "@/contexts/MediaContext";
 import PrivacyNote from "@/components/PrivacyNote";
 import { useTranslate } from "@/contexts/TranslateContext";
+import UpgradeModal from "@/components/UpgradeModal";
+import { useMembership } from "@/contexts/MembershipContext";
 
 const { width } = Dimensions.get('window');
 const GAP = 8;
@@ -45,10 +47,12 @@ export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const { media, pickFromLibrary, capturePhoto, captureVideo, removeItem, setPrimary } = useMedia();
   const { translate, targetLang, enabled } = useTranslate();
+  const { tier } = useMembership();
   const [bioTranslated, setBioTranslated] = useState<string | undefined>(undefined);
   const [bioDetected, setBioDetected] = useState<string>("");
   const [showTranslated, setShowTranslated] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+  const [upgradeVisible, setUpgradeVisible] = useState<boolean>(false);
 
   useEffect(() => {
     const run = async () => {
@@ -118,6 +122,17 @@ export default function ProfileScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.planBanner}>
+          <View style={styles.planLeft}>
+            <Crown color={tier === 'plus' ? '#F59E0B' : '#6B7280'} size={18} />
+            <Text style={styles.planText}>{tier === 'plus' ? 'Premium/Pro active' : 'Free/Basic plan'}</Text>
+          </View>
+          {tier === 'free' ? (
+            <TouchableOpacity style={styles.upgradeBtn} onPress={() => setUpgradeVisible(true)} testID="open-upgrade">
+              <Text style={styles.upgradeBtnText}>Upgrade</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
         <View style={styles.profileSection}>
           <View style={styles.imageContainer}>
             <Image
@@ -229,6 +244,7 @@ export default function ProfileScreen() {
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
       </ScrollView>
+      <UpgradeModal visible={upgradeVisible} onClose={() => setUpgradeVisible(false)} testID="upgrade-modal" />
     </SafeAreaView>
   );
 }
@@ -259,6 +275,23 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 30,
   },
+  planBanner: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 12,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  planLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  planText: { fontSize: 13, fontWeight: '700', color: '#111827' },
+  upgradeBtn: { backgroundColor: '#10B981', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  upgradeBtnText: { color: '#fff', fontWeight: '800', fontSize: 12 },
   profileSection: {
     alignItems: "center",
     paddingVertical: 30,

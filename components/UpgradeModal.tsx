@@ -15,7 +15,7 @@ export default function UpgradeModal({ visible, onClose, testID }: UpgradeModalP
 
   const handleUpgrade = useCallback(async () => {
     try {
-      const url = 'https://buy.stripe.com/test_1234567890';
+      const url = 'https://buy.stripe.com/test_1234567890?prefilled_email=premium@demo.app';
       await WebBrowser.openBrowserAsync(url);
     } catch (e) {
       console.log('[UpgradeModal] open checkout error', e);
@@ -38,7 +38,7 @@ export default function UpgradeModal({ visible, onClose, testID }: UpgradeModalP
           <View style={styles.headerRow}>
             <View style={styles.titleRow}>
               <Crown color="#F59E0B" size={22} />
-              <Text style={styles.title}>Go Plus</Text>
+              <Text style={styles.title}>Go Premium • $9.99/mo</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn} testID="upgrade-close">
               <X color="#6B7280" size={20} />
@@ -47,22 +47,23 @@ export default function UpgradeModal({ visible, onClose, testID }: UpgradeModalP
 
           <View style={styles.perks}>
             <Perk text="Unlimited swipes" />
+            <Perk text="AI profile matching + Translator" />
             <Perk text="No ads" />
-            <Perk text="AI-recommended deck" />
-            <Perk text="Upload up to 12 photos and 6 videos" />
+            <Perk text="Unlimited media uploads" />
+            <Perk text="Priority visibility" />
           </View>
 
           <TouchableOpacity onPress={handleUpgrade} style={styles.cta} testID="upgrade-cta">
-            <Text style={styles.ctaText}>Upgrade</Text>
+            <Text style={styles.ctaText}>Upgrade to Premium</Text>
           </TouchableOpacity>
 
           <TouchableOpacity onPress={handleRestore} style={styles.restore} testID="upgrade-restore">
-            <Text style={styles.restoreText}>Restore (dev/test)</Text>
+            <Text style={styles.restoreText}>Restore purchase (dev)</Text>
           </TouchableOpacity>
 
           <View style={styles.safeNote}>
             <ShieldCheck color="#10B981" size={16} />
-            <Text style={styles.safeNoteText}>Payments handled securely in browser. No card data stored in app.</Text>
+            <Text style={styles.safeNoteText}>Handled via Stripe Checkout in a secure browser. No payment info is stored on-device.</Text>
           </View>
         </View>
       </View>

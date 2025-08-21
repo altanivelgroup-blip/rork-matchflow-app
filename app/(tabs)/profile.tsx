@@ -148,6 +148,9 @@ export default function ProfileScreen() {
           <Text style={styles.userBio}>
             {showTranslated && bioTranslated && bioTranslated !== (user?.bio ?? '') ? bioTranslated : (user?.bio || "Adventure seeker, coffee lover, and dog enthusiast")}
           </Text>
+          <TouchableOpacity style={styles.qButton} onPress={() => router.push('/questionnaire' as any)} testID="open-questionnaire">
+            <Text style={styles.qButtonText}>Edit Profile Questionnaire</Text>
+          </TouchableOpacity>
           <View style={styles.translateRow}>
             <TouchableOpacity style={styles.translatePill} onPress={handleTranslateBio} testID="translate-bio">
               <Languages color={showTranslated ? '#10B981' : '#2563EB'} size={16} />
@@ -335,6 +338,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
     lineHeight: 22,
   },
+  qButton: { marginTop: 12, backgroundColor: '#111827', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999 },
+  qButtonText: { color: '#fff', fontWeight: '700', fontSize: 12 },
   translateRow: {
     flexDirection: 'row',
     justifyContent: 'center',

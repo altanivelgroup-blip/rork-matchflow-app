@@ -31,6 +31,20 @@ export interface MembershipSnapshot {
   subscription: SubscriptionInfo;
 }
 
+export interface QuestionnaireAnswers {
+  hobbies: string[];
+  preferredAgeRange: { min: number; max: number };
+  dealBreakers: string[];
+  bio: string;
+  interests: string[];
+  loveLanguages?: string[];
+  personalityTraits?: string[];
+  lifestyle?: { alcohol?: string; smoking?: string; fitness?: string };
+  lookingFor?: string;
+  musicGenres?: string[];
+  cuisine?: string[];
+}
+
 export interface BackendAPI {
   fetchMembership(userId: UserId): Promise<MembershipSnapshot>;
   setTier(userId: UserId, tier: MembershipTier): Promise<MembershipSnapshot>;
@@ -38,6 +52,8 @@ export interface BackendAPI {
   resetDaily(userId: UserId): Promise<MembershipSnapshot>;
   cancelSubscription(userId: UserId): Promise<MembershipSnapshot>;
   restoreSubscription(userId: UserId): Promise<MembershipSnapshot>;
+  fetchQuestionnaire(userId: UserId): Promise<QuestionnaireAnswers | null>;
+  saveQuestionnaire(userId: UserId, answers: QuestionnaireAnswers): Promise<QuestionnaireAnswers>;
 }
 
 const STORAGE_PREFIX = 'mock-backend:v1';
@@ -103,6 +119,23 @@ export class MockBackend implements BackendAPI {
     parsed.limits = limitsFor(parsed.tier);
     await AsyncStorage.setItem(key, JSON.stringify(parsed));
     return parsed;
+  }
+
+  async fetchQuestionnaire(userId: UserId): Promise<QuestionnaireAnswers | null> {
+    const key = `${STORAGE_PREFIX}:q:${userId}`;
+    const raw = await AsyncStorage.getItem(key);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as QuestionnaireAnswers;
+    } catch {
+      return null;
+    }
+  }
+
+  async saveQuestionnaire(userId: UserId, answers: QuestionnaireAnswers): Promise<QuestionnaireAnswers> {
+    const key = `${STORAGE_PREFIX}:q:${userId}`;
+    await AsyncStorage.setItem(key, JSON.stringify(answers));
+    return answers;
   }
 
   async setTier(userId: UserId, tier: MembershipTier): Promise<MembershipSnapshot> {

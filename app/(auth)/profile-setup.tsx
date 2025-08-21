@@ -130,7 +130,7 @@ export default function ProfileSetupScreen() {
     } catch (e) {
       console.log('[ProfileSetup] persist face data error', e);
     }
-    router.replace("/(tabs)");
+    router.replace("/questionnaire" as any);
   };
 
   if (verified === null) {

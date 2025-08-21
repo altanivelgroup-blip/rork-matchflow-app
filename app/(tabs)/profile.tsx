@@ -42,6 +42,7 @@ function TrianglePlayIcon() {
     }} />
   );
 }
+import { backend, type QuestionnaireAnswers } from "@/lib/backend";
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
@@ -53,6 +54,9 @@ export default function ProfileScreen() {
   const [showTranslated, setShowTranslated] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [upgradeVisible, setUpgradeVisible] = useState<boolean>(false);
+  const uid = user?.email ?? "guest";
+  const [q, setQ] = useState<QuestionnaireAnswers | null>(null);
+  const [qLoading, setQLoading] = useState<boolean>(false);
 
   useEffect(() => {
     const run = async () => {
@@ -73,6 +77,23 @@ export default function ProfileScreen() {
     };
     run();
   }, [enabled, translate, user?.bio, bioTranslated]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadQ = async () => {
+      try {
+        setQLoading(true);
+        const data = await backend.fetchQuestionnaire(uid);
+        if (!mounted) return;
+        setQ(data);
+      } catch (e) {
+        console.log('[Profile] load questionnaire error', e);
+      } finally {
+        setQLoading(false);
+      }
+    };
+    loadQ();
+  }, [uid]);
 
   const handleTranslateBio = useCallback(async () => {
     const bio = user?.bio ?? '';
@@ -108,6 +129,22 @@ export default function ProfileScreen() {
   const sorted = useMemo(() => {
     return [...media].sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || b.createdAt - a.createdAt);
   }, [media]);
+
+  const answeredCount = useMemo(() => {
+    if (!q) return 0;
+    let count = 0;
+    if ((q.hobbies?.length ?? 0) > 0) count++;
+    if ((q.dealBreakers?.length ?? 0) > 0) count++;
+    if ((q.bio?.trim().length ?? 0) >= 10) count++;
+    if ((q.interests?.length ?? 0) > 0) count++;
+    if ((q.preferredAgeRange?.min ?? 0) > 0) count++;
+    return count;
+  }, [q]);
+
+  const completionPct = useMemo(() => {
+    const total = 5;
+    return Math.min(100, Math.round((answeredCount / total) * 100));
+  }, [answeredCount]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -146,10 +183,10 @@ export default function ProfileScreen() {
 
           <Text style={styles.userName}>{user?.name || "User"}, 25</Text>
           <Text style={styles.userBio}>
-            {showTranslated && bioTranslated && bioTranslated !== (user?.bio ?? '') ? bioTranslated : (user?.bio || "Adventure seeker, coffee lover, and dog enthusiast")}
+            {showTranslated && bioTranslated && bioTranslated !== (user?.bio ?? '') ? bioTranslated : (user?.bio || q?.bio || "Adventure seeker, coffee lover, and dog enthusiast")}
           </Text>
           <TouchableOpacity style={styles.qButton} onPress={() => router.push('/questionnaire' as any)} testID="open-questionnaire">
-            <Text style={styles.qButtonText}>Edit Profile Questionnaire</Text>
+            <Text style={styles.qButtonText}>{q ? 'Edit Profile Questionnaire' : 'Complete Profile Questionnaire'}</Text>
           </TouchableOpacity>
           <View style={styles.translateRow}>
             <TouchableOpacity style={styles.translatePill} onPress={handleTranslateBio} testID="translate-bio">
@@ -160,6 +197,36 @@ export default function ProfileScreen() {
               <Text style={styles.translateMeta}>{`AI (${bioDetected}) → ${targetLang}`}</Text>
             ) : null}
           </View>
+        </View>
+
+        {/* Questionnaire Summary */}
+        <View style={styles.qCard}>
+          <View style={styles.qHeaderRow}>
+            <Text style={styles.qCardTitle}>Profile Questionnaire</Text>
+            <Text style={styles.qProgressText}>{qLoading ? 'Loading…' : `${completionPct}%`}</Text>
+          </View>
+          <View style={styles.qProgressBarOuter}>
+            <View style={[styles.qProgressBarInner, { width: `${completionPct}%` }]} />
+          </View>
+          <View style={styles.qChipsRow}>
+            {(q?.hobbies ?? []).slice(0, 4).map((h) => (
+              <View key={h} style={styles.qChip}><Text style={styles.qChipText}>{h}</Text></View>
+            ))}
+            {(q?.interests ?? []).slice(0, 4).map((i) => (
+              <View key={i} style={styles.qChip}><Text style={styles.qChipText}>{i}</Text></View>
+            ))}
+          </View>
+          <View style={styles.qMetaRow}>
+            {q?.preferredAgeRange ? (
+              <Text style={styles.qMetaText}>{`Age: ${q.preferredAgeRange.min}-${q.preferredAgeRange.max}`}</Text>
+            ) : null}
+            {q?.lookingFor ? (
+              <Text style={styles.qMetaText}>{`Looking: ${q.lookingFor}`}</Text>
+            ) : null}
+          </View>
+          <TouchableOpacity style={styles.qEditBtn} onPress={() => router.push('/questionnaire' as any)} testID="edit-questionnaire-inline">
+            <Text style={styles.qEditText}>{q ? 'Edit answers' : 'Start now'}</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.statsContainer}>
@@ -366,6 +433,28 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#6B7280',
   },
+  qCard: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 14,
+  },
+  qHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  qCardTitle: { fontSize: 16, fontWeight: '800', color: '#111827' },
+  qProgressText: { fontSize: 12, fontWeight: '700', color: '#6B7280' },
+  qProgressBarOuter: { height: 6, backgroundColor: '#E5E7EB', borderRadius: 999, overflow: 'hidden', marginBottom: 10 },
+  qProgressBarInner: { height: 6, backgroundColor: '#10B981', borderRadius: 999 },
+  qChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+  qChip: { backgroundColor: '#F3F4F6', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  qChipText: { fontSize: 12, fontWeight: '700', color: '#111827' },
+  qMetaRow: { flexDirection: 'row', gap: 12, marginBottom: 10 },
+  qMetaText: { fontSize: 12, color: '#6B7280' },
+  qEditBtn: { alignSelf: 'flex-start', backgroundColor: '#111827', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  qEditText: { color: '#fff', fontWeight: '800', fontSize: 12 },
+
   statsContainer: {
     flexDirection: "row",
     justifyContent: "space-around",

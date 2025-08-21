@@ -1,8 +1,8 @@
-import React, { useCallback } from 'react';
-import { Modal, View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
-import { Crown, ShieldCheck, X } from 'lucide-react-native';
-import * as WebBrowser from 'expo-web-browser';
+import React, { useCallback, useState } from 'react';
+import { Modal, View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Crown, ShieldCheck, X, AlertTriangle } from 'lucide-react-native';
 import { useMembership } from '@/contexts/MembershipContext';
+import { startStripeCheckout } from '@/lib/payments';
 
 interface UpgradeModalProps {
   visible: boolean;
@@ -11,18 +11,35 @@ interface UpgradeModalProps {
 }
 
 export default function UpgradeModal({ visible, onClose, testID }: UpgradeModalProps) {
-  const { setTier } = useMembership();
+  const { setTier, refresh } = useMembership();
+  const [busy, setBusy] = useState<boolean>(false);
+  const [error, setError] = useState<string | undefined>(undefined);
 
   const handleUpgrade = useCallback(async () => {
+    console.log('[UpgradeModal] starting checkout');
+    setError(undefined);
+    setBusy(true);
     try {
-      const url = 'https://buy.stripe.com/test_1234567890?prefilled_email=premium@demo.app';
-      await WebBrowser.openBrowserAsync(url);
+      const result = await startStripeCheckout();
+      if (result.success) {
+        console.log('[UpgradeModal] checkout success');
+        await refresh();
+        await setTier('plus');
+        onClose();
+      } else {
+        console.log('[UpgradeModal] checkout failed', result.message);
+        setError(result.message ?? 'Payment declined — try another card.');
+      }
     } catch (e) {
-      console.log('[UpgradeModal] open checkout error', e);
+      console.log('[UpgradeModal] checkout error', e);
+      setError('Payment failed. Please try again.');
+    } finally {
+      setBusy(false);
     }
-  }, []);
+  }, [onClose, refresh, setTier]);
 
   const handleRestore = useCallback(async () => {
+    console.log('[UpgradeModal] restore purchase (dev)');
     try {
       await setTier('plus');
       onClose();
@@ -53,17 +70,24 @@ export default function UpgradeModal({ visible, onClose, testID }: UpgradeModalP
             <Perk text="Priority visibility" />
           </View>
 
-          <TouchableOpacity onPress={handleUpgrade} style={styles.cta} testID="upgrade-cta">
-            <Text style={styles.ctaText}>Upgrade to Premium</Text>
+          {error ? (
+            <View style={styles.errorRow} testID="upgrade-error">
+              <AlertTriangle color="#B91C1C" size={16} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
+          <TouchableOpacity onPress={handleUpgrade} style={styles.cta} disabled={busy} testID="upgrade-cta">
+            {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaText}>Upgrade to Premium</Text>}
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={handleRestore} style={styles.restore} testID="upgrade-restore">
+          <TouchableOpacity onPress={handleRestore} style={styles.restore} disabled={busy} testID="upgrade-restore">
             <Text style={styles.restoreText}>Restore purchase (dev)</Text>
           </TouchableOpacity>
 
           <View style={styles.safeNote}>
             <ShieldCheck color="#10B981" size={16} />
-            <Text style={styles.safeNoteText}>Handled via Stripe Checkout in a secure browser. No payment info is stored on-device.</Text>
+            <Text style={styles.safeNoteText}>Secure Stripe Checkout handles cards, Apple Pay, and Google Pay.</Text>
           </View>
         </View>
       </View>
@@ -122,4 +146,6 @@ const styles = StyleSheet.create({
   restoreText: { color: '#6B7280', fontWeight: '700' },
   safeNote: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
   safeNoteText: { color: '#6B7280', fontSize: 12, fontWeight: '600', flex: 1 },
+  errorRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA', padding: 8, borderRadius: 8 },
+  errorText: { color: '#7F1D1D', fontSize: 12, fontWeight: '800', flex: 1 },
 });

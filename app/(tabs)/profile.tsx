@@ -11,13 +11,14 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { Settings, Edit, LogOut, Heart, Star, Eye, Camera, Image as ImageIcon, Upload, Trash, Crown, Languages } from "lucide-react-native";
+import { Settings, Edit, LogOut, Heart, Star, Eye, Camera, Image as ImageIcon, Upload, Trash, Crown, Languages, Check } from "lucide-react-native";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMedia } from "@/contexts/MediaContext";
 import PrivacyNote from "@/components/PrivacyNote";
 import { useTranslate } from "@/contexts/TranslateContext";
 import UpgradeModal from "@/components/UpgradeModal";
 import { useMembership } from "@/contexts/MembershipContext";
+import { supportedLocales, type SupportedLocale } from "@/lib/i18n";
 
 const { width } = Dimensions.get('window');
 const GAP = 8;
@@ -47,13 +48,14 @@ import { backend, type QuestionnaireAnswers } from "@/lib/backend";
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const { media, pickFromLibrary, capturePhoto, captureVideo, removeItem, setPrimary } = useMedia();
-  const { translate, targetLang, enabled } = useTranslate();
+  const { translate, targetLang, enabled, setTargetLang, setEnabled } = useTranslate();
   const { tier } = useMembership();
   const [bioTranslated, setBioTranslated] = useState<string | undefined>(undefined);
   const [bioDetected, setBioDetected] = useState<string>("");
   const [showTranslated, setShowTranslated] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [upgradeVisible, setUpgradeVisible] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<'profile' | 'language'>('profile');
   const uid = user?.email ?? "guest";
   const [q, setQ] = useState<QuestionnaireAnswers | null>(null);
   const [qLoading, setQLoading] = useState<boolean>(false);
@@ -170,6 +172,24 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           ) : null}
         </View>
+        <View style={styles.tabBar}>
+          <TouchableOpacity
+            style={[styles.tabBtn, activeTab === 'profile' ? styles.tabBtnActive : undefined]}
+            onPress={() => setActiveTab('profile')}
+            testID="tab-profile"
+          >
+            <Text style={[styles.tabBtnText, activeTab === 'profile' ? styles.tabBtnTextActive : undefined]}>Profile</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabBtn, activeTab === 'language' ? styles.tabBtnActive : undefined]}
+            onPress={() => setActiveTab('language')}
+            testID="tab-language"
+          >
+            <Text style={[styles.tabBtnText, activeTab === 'language' ? styles.tabBtnTextActive : undefined]}>Language</Text>
+          </TouchableOpacity>
+        </View>
+
+        {activeTab === 'profile' ? (
         <View style={styles.profileSection}>
           <View style={styles.imageContainer}>
             <Image
@@ -198,6 +218,46 @@ export default function ProfileScreen() {
             ) : null}
           </View>
         </View>
+        ) : (
+          <View style={styles.languageSection}>
+            <Text style={styles.langTitle}>Translation settings</Text>
+            <View style={styles.langToggleRow}>
+              <Text style={styles.langToggleLabel}>Enable AI Translate</Text>
+              <TouchableOpacity
+                accessibilityRole="switch"
+                accessibilityState={{ checked: enabled }}
+                onPress={() => setEnabled(!enabled)}
+                style={[styles.toggle, enabled ? styles.toggleOn : styles.toggleOff]}
+                testID="toggle-translate"
+              >
+                <View style={[styles.knob, enabled ? styles.knobOn : styles.knobOff]} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.langSubtitle}>Target language</Text>
+            <View style={styles.langList}>
+              {Object.entries(supportedLocales).map(([code, label]) => {
+                const c = code as SupportedLocale;
+                const selected = targetLang === c;
+                return (
+                  <TouchableOpacity
+                    key={code}
+                    style={[styles.langItem, selected ? styles.langItemActive : undefined]}
+                    onPress={() => setTargetLang(c)}
+                    testID={`lang-${code}`}
+                  >
+                    <Text style={[styles.langItemText, selected ? styles.langItemTextActive : undefined]}>{label}</Text>
+                    {selected ? <Check color="#10B981" size={18} /> : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={styles.langHintBox}>
+              <Text style={styles.langHintText}>Your bio and chats can be translated to your target language.</Text>
+            </View>
+          </View>
+        )}
 
         {/* Questionnaire Summary */}
         <View style={styles.qCard}>
@@ -362,12 +422,67 @@ const styles = StyleSheet.create({
   planText: { fontSize: 13, fontWeight: '700', color: '#111827' },
   upgradeBtn: { backgroundColor: '#10B981', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
   upgradeBtnText: { color: '#fff', fontWeight: '800', fontSize: 12 },
+  tabBar: {
+    marginHorizontal: 16,
+    marginTop: 6,
+    marginBottom: 12,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 6,
+    flexDirection: 'row',
+    gap: 6,
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  tabBtnActive: {
+    backgroundColor: '#111827',
+  },
+  tabBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#6B7280',
+  },
+  tabBtnTextActive: {
+    color: '#fff',
+  },
   profileSection: {
     alignItems: "center",
     paddingVertical: 30,
     backgroundColor: "#fff",
     marginBottom: 12,
   },
+  languageSection: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 14,
+  },
+  langTitle: { fontSize: 16, fontWeight: '800', color: '#111827', marginBottom: 8 },
+  langToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  langToggleLabel: { fontSize: 14, color: '#111827', fontWeight: '700' },
+  toggle: { width: 56, height: 32, borderRadius: 16, padding: 3, justifyContent: 'center' },
+  toggleOn: { backgroundColor: '#10B981', alignItems: 'flex-end' },
+  toggleOff: { backgroundColor: '#E5E7EB', alignItems: 'flex-start' },
+  knob: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#fff' },
+  knobOn: {},
+  knobOff: {},
+  langSubtitle: { fontSize: 12, fontWeight: '800', color: '#6B7280', marginBottom: 8, textTransform: 'uppercase' },
+  langList: { gap: 8 },
+  langItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: '#E5E7EB' },
+  langItemActive: { borderColor: '#10B981', backgroundColor: '#ECFDF5' },
+  langItemText: { fontSize: 14, fontWeight: '700', color: '#111827' },
+  langItemTextActive: { color: '#065F46' },
+  langHintBox: { marginTop: 12, backgroundColor: '#F1F5F9', padding: 10, borderRadius: 10 },
+  langHintText: { fontSize: 12, color: '#334155' },
   imageContainer: {
     position: "relative",
     marginBottom: 20,

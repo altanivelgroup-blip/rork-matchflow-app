@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useEffect } from "react";
+import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import { useQuery } from "@tanstack/react-query";
 import { scoreProfilesAgainstUser } from "@/lib/aiMatch";
 import { useTranslate } from "@/contexts/TranslateContext";
 import { useMembership } from "@/contexts/MembershipContext";
+import UpgradeModal from "@/components/UpgradeModal";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 const SWIPE_THRESHOLD = screenWidth * 0.25;
@@ -33,6 +34,7 @@ export default function DiscoverScreen() {
   const { user } = useAuth();
   const { enabled: tEnabled, translate, targetLang } = useTranslate();
   const { limits, canSwipe, swipeState, incSwipe } = useMembership();
+  const [showUpgrade, setShowUpgrade] = useState<boolean>(false);
   const [tMap, setTMap] = useState<Record<string, { bio?: string; interests?: string[]; bioTranslated: boolean; interestsTranslated: boolean }>>({});
 
   const aiQuery = useQuery<{ scores: { id: string; score: number; reason: string }[] }, Error>({
@@ -155,8 +157,12 @@ export default function DiscoverScreen() {
     })
   ).current;
 
+  const onBlocked = useCallback((): void => {
+    setShowUpgrade(true);
+  }, []);
+
   const swipeLeft = () => {
-    if (!canSwipe) return;
+    if (!canSwipe) { onBlocked(); return; }
     incSwipe().catch(() => {});
     Animated.timing(position, {
       toValue: { x: -screenWidth * 1.5, y: 0 },
@@ -166,7 +172,7 @@ export default function DiscoverScreen() {
   };
 
   const swipeRight = () => {
-    if (!canSwipe) return;
+    if (!canSwipe) { onBlocked(); return; }
     incSwipe().catch(() => {});
     const deck = orderedProfiles;
     const profile = deck[currentIndex] as MockProfile | undefined;
@@ -451,6 +457,8 @@ export default function DiscoverScreen() {
           <Heart color="#4FC3F7" size={30} fill="#4FC3F7" />
         </TouchableOpacity>
       </View>
+
+      <UpgradeModal visible={showUpgrade} onClose={() => setShowUpgrade(false)} testID="upgrade-modal" />
 
       {limits.adsEnabled ? (
         <View style={styles.adBanner} testID="ad-banner">

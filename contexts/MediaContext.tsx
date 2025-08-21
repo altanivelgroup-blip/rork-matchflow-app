@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { Alert } from 'react-native';
 import { verifySingleImage } from '@/lib/faceVerification';
+import { useMembership } from '@/contexts/MembershipContext';
 
 export type MediaType = 'image' | 'video';
 
@@ -39,6 +40,7 @@ async function requestPermissions(type: MediaType) {
 
 export const [MediaProvider, useMedia] = createContextHook<MediaContextType>(() => {
   const [media, setMedia] = useState<MediaItem[]>([]);
+  const { limits } = useMembership();
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [uploadPending, setUploadPending] = useState<boolean>(false);
 
@@ -68,6 +70,16 @@ export const [MediaProvider, useMedia] = createContextHook<MediaContextType>(() 
 
   const addItem = useCallback((item: MediaItem) => {
     setMedia((prev) => {
+      const images = prev.filter(p => p.type === 'image').length;
+      const videos = prev.filter(p => p.type === 'video').length;
+      if (item.type === 'image' && limits.maxPhotos != null && images >= limits.maxPhotos) {
+        alert('Photo limit reached for your plan.');
+        return prev;
+      }
+      if (item.type === 'video' && limits.maxVideos != null && videos >= limits.maxVideos) {
+        alert('Video limit reached for your plan.');
+        return prev;
+      }
       const next = [...prev];
       if (next.length === 0) {
         item.isPrimary = true;
@@ -75,7 +87,7 @@ export const [MediaProvider, useMedia] = createContextHook<MediaContextType>(() 
       next.unshift(item);
       return next;
     });
-  }, []);
+  }, [limits.maxPhotos, limits.maxVideos]);
 
   const pickFromLibrary = useCallback(async (type: MediaType) => {
     try {

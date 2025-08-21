@@ -1,6 +1,8 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { backend } from '@/lib/backend';
+import { useAuth } from '@/contexts/AuthContext';
 
 export type MembershipTier = 'free' | 'plus';
 
@@ -50,26 +52,24 @@ function limitsFor(tier: MembershipTier): Limits {
 }
 
 export const [MembershipProvider, useMembership] = createContextHook<MembershipContextType>(() => {
+  const { user } = useAuth();
   const [tier, setTierState] = useState<MembershipTier>('free');
   const [swipeState, setSwipeState] = useState<SwipeState>({ dateISO: new Date().toISOString().slice(0, 10), count: 0 });
 
   useEffect(() => {
     (async () => {
       try {
-        const [t, s] = await Promise.all([
-          AsyncStorage.getItem(STORAGE_TIER),
-          AsyncStorage.getItem(STORAGE_SWIPE),
-        ]);
-        if (t === 'free' || t === 'plus') setTierState(t);
-        if (s) {
-          const parsed = JSON.parse(s) as SwipeState;
-          setSwipeState(parsed);
-        }
+        const uid = user?.email ?? 'guest';
+        const snap = await backend.fetchMembership(uid);
+        setTierState(snap.tier);
+        setSwipeState(snap.swipeState);
+        await AsyncStorage.setItem(STORAGE_TIER, snap.tier);
+        await AsyncStorage.setItem(STORAGE_SWIPE, JSON.stringify(snap.swipeState));
       } catch (e) {
         console.log('[Membership] load error', e);
       }
     })();
-  }, []);
+  }, [user?.email]);
 
   const saveTier = useCallback(async (t: MembershipTier) => {
     try {
@@ -82,37 +82,44 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
   const setTier = useCallback(async (t: MembershipTier) => {
     setTierState(t);
     await saveTier(t);
-  }, [saveTier]);
+    try {
+      const uid = user?.email ?? 'guest';
+      const snap = await backend.setTier(uid, t);
+      setSwipeState(snap.swipeState);
+      await AsyncStorage.setItem(STORAGE_SWIPE, JSON.stringify(snap.swipeState));
+    } catch (e) {
+      console.log('[Membership] backend setTier error', e);
+    }
+  }, [saveTier, user?.email]);
 
   const resetSwipeIfNewDay = useCallback(async () => {
     const today = new Date().toISOString().slice(0, 10);
     if (swipeState.dateISO !== today) {
-      const next: SwipeState = { dateISO: today, count: 0 };
-      setSwipeState(next);
+      const uid = user?.email ?? 'guest';
       try {
-        await AsyncStorage.setItem(STORAGE_SWIPE, JSON.stringify(next));
+        const snap = await backend.resetDaily(uid);
+        setSwipeState(snap.swipeState);
+        await AsyncStorage.setItem(STORAGE_SWIPE, JSON.stringify(snap.swipeState));
       } catch (e) {
         console.log('[Membership] reset swipe persist error', e);
       }
     }
-  }, [swipeState.dateISO]);
+  }, [swipeState.dateISO, user?.email]);
 
   useEffect(() => {
     resetSwipeIfNewDay();
   }, [resetSwipeIfNewDay]);
 
   const incSwipe = useCallback(async () => {
-    const today = new Date().toISOString().slice(0, 10);
-    const sameDay = swipeState.dateISO === today;
-    const base = sameDay ? swipeState : { dateISO: today, count: 0 };
-    const next: SwipeState = { dateISO: today, count: base.count + 1 };
-    setSwipeState(next);
     try {
-      await AsyncStorage.setItem(STORAGE_SWIPE, JSON.stringify(next));
+      const uid = user?.email ?? 'guest';
+      const snap = await backend.recordSwipe(uid);
+      setSwipeState(snap.swipeState);
+      await AsyncStorage.setItem(STORAGE_SWIPE, JSON.stringify(snap.swipeState));
     } catch (e) {
       console.log('[Membership] inc swipe persist error', e);
     }
-  }, [swipeState]);
+  }, [user?.email]);
 
   const limits = limitsFor(tier);
   const canSwipe = limits.dailySwipes == null || swipeState.count < (limits.dailySwipes ?? 0);

@@ -110,7 +110,6 @@ export class MockBackend implements BackendAPI {
     if (parsed.swipeState.dateISO !== today) {
       parsed.swipeState = { dateISO: today, count: 0 };
     }
-    // Check subscription expiration and downgrade if needed
     const status = computeExpired(parsed.subscription);
     if (status === 'expired' || status === 'canceled') {
       parsed.tier = 'free';
@@ -200,4 +199,61 @@ export class MockBackend implements BackendAPI {
   }
 }
 
-export const backend: BackendAPI = new MockBackend();
+class RestBackend implements BackendAPI {
+  baseUrl: string;
+  constructor(baseUrl: string) {
+    this.baseUrl = baseUrl.replace(/\/$/, '');
+  }
+  private async post<T>(path: string, body: unknown): Promise<T> {
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`HTTP ${res.status}: ${text}`);
+    }
+    return res.json() as Promise<T>;
+  }
+  private async get<T>(path: string): Promise<T> {
+    const res = await fetch(`${this.baseUrl}${path}`);
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`HTTP ${res.status}: ${text}`);
+    }
+    return res.json() as Promise<T>;
+  }
+  async fetchMembership(userId: UserId): Promise<MembershipSnapshot> {
+    return this.get<MembershipSnapshot>(`/api/membership?userId=${encodeURIComponent(userId)}`);
+  }
+  async setTier(userId: UserId, tier: MembershipTier): Promise<MembershipSnapshot> {
+    return this.post<MembershipSnapshot>(`/api/membership/set-tier`, { userId, tier });
+  }
+  async recordSwipe(userId: UserId): Promise<MembershipSnapshot> {
+    return this.post<MembershipSnapshot>(`/api/membership/record-swipe`, { userId });
+  }
+  async resetDaily(userId: UserId): Promise<MembershipSnapshot> {
+    return this.post<MembershipSnapshot>(`/api/membership/reset-daily`, { userId });
+  }
+  async cancelSubscription(userId: UserId): Promise<MembershipSnapshot> {
+    return this.post<MembershipSnapshot>(`/api/membership/cancel`, { userId });
+  }
+  async restoreSubscription(userId: UserId): Promise<MembershipSnapshot> {
+    return this.post<MembershipSnapshot>(`/api/membership/restore`, { userId });
+  }
+  async fetchQuestionnaire(userId: UserId): Promise<QuestionnaireAnswers | null> {
+    try {
+      return await this.get<QuestionnaireAnswers | null>(`/api/profile/questionnaire?userId=${encodeURIComponent(userId)}`);
+    } catch (e) {
+      return null;
+    }
+  }
+  async saveQuestionnaire(userId: UserId, answers: QuestionnaireAnswers): Promise<QuestionnaireAnswers> {
+    return this.post<QuestionnaireAnswers>(`/api/profile/questionnaire`, { userId, answers });
+  }
+}
+
+export const BACKEND_URL = 'https://YOUR_BACKEND_URL';
+const hasBackend = BACKEND_URL.startsWith('https://') && !BACKEND_URL.includes('YOUR_BACKEND_URL');
+export const backend: BackendAPI = hasBackend ? new RestBackend(BACKEND_URL) : new MockBackend();

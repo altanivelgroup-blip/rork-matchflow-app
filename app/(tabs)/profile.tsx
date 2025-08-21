@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
   Image,
   FlatList,
   Dimensions,
@@ -21,6 +20,7 @@ import { useMembership } from "@/contexts/MembershipContext";
 import { supportedLocales, type SupportedLocale } from "@/lib/i18n";
 import { showToast } from "@/lib/toast";
 import { useI18n } from "@/contexts/I18nContext";
+import { backend, type QuestionnaireAnswers } from "@/lib/backend";
 
 const { width } = Dimensions.get('window');
 const GAP = 8;
@@ -45,14 +45,13 @@ function TrianglePlayIcon() {
     }} />
   );
 }
-import { backend, type QuestionnaireAnswers } from "@/lib/backend";
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const { media, pickFromLibrary, capturePhoto, captureVideo, removeItem, setPrimary } = useMedia();
   const { translate, targetLang, enabled, setTargetLang, setEnabled } = useTranslate();
   const { tier } = useMembership();
-  const { locale, setLocale } = useI18n();
+  const { locale, setLocale, t } = useI18n();
   const mountedRef = useRef<boolean>(false);
   const [bioTranslated, setBioTranslated] = useState<string | undefined>(undefined);
   const [bioDetected, setBioDetected] = useState<string>("");
@@ -184,250 +183,251 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>{useI18n().t('profile.header')}</Text>
+        <Text style={styles.headerTitle}>{t('profile.header')}</Text>
         <TouchableOpacity style={styles.settingsButton} onPress={() => router.push("/(tabs)/settings" as any)} testID="open-settings">
           <Settings color="#333" size={24} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.planBanner}>
-          <View style={styles.planLeft}>
-            <Crown color={tier === 'plus' ? '#F59E0B' : '#6B7280'} size={18} />
-            <Text style={styles.planText}>{tier === 'plus' ? 'Premium/Pro active' : 'Free/Basic plan'}</Text>
-          </View>
-          {tier === 'free' ? (
-            <TouchableOpacity style={styles.upgradeBtn} onPress={() => setUpgradeVisible(true)} testID="open-upgrade">
-              <Text style={styles.upgradeBtnText}>Upgrade</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
-        <View style={styles.tabBar}>
-          <TouchableOpacity
-            style={[styles.tabBtn, activeTab === 'profile' ? styles.tabBtnActive : undefined]}
-            onPress={() => setActiveTab('profile')}
-            testID="tab-profile"
-          >
-            <Text style={[styles.tabBtnText, activeTab === 'profile' ? styles.tabBtnTextActive : undefined]}>{useI18n().t('profile.header')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tabBtn, activeTab === 'language' ? styles.tabBtnActive : undefined]}
-            onPress={() => setActiveTab('language')}
-            testID="tab-language"
-          >
-            <Text style={[styles.tabBtnText, activeTab === 'language' ? styles.tabBtnTextActive : undefined]}>{useI18n().t('common.language') ?? 'Language'}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {activeTab === 'profile' ? (
-        <View style={styles.profileSection}>
-          <View style={styles.imageContainer}>
-            <Image
-              source={{ uri: sorted.find(m => m.isPrimary)?.localUri || "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400" }}
-              style={styles.profileImage}
-            />
-            <TouchableOpacity style={styles.editButton} onPress={() => pickFromLibrary('image')} testID="edit-avatar">
-              <Edit color="#fff" size={16} />
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.userName}>{user?.name || "User"}, 25</Text>
-          <Text style={styles.userBio}>
-            {showTranslated && bioTranslated && bioTranslated !== (user?.bio ?? '') ? bioTranslated : (user?.bio || q?.bio || "Adventure seeker, coffee lover, and dog enthusiast")}
-          </Text>
-          <TouchableOpacity style={styles.qButton} onPress={() => router.push('/questionnaire' as any)} testID="open-questionnaire">
-            <Text style={styles.qButtonText}>{q ? 'Edit Profile Questionnaire' : 'Complete Profile Questionnaire'}</Text>
-          </TouchableOpacity>
-          <View style={styles.translateRow}>
-            <TouchableOpacity style={styles.translatePill} onPress={handleTranslateBio} testID="translate-bio">
-              <Languages color={showTranslated ? '#10B981' : '#2563EB'} size={16} />
-              <Text style={[styles.translateText, { color: showTranslated ? '#10B981' : '#2563EB' }]}>{loading ? 'Translating…' : showTranslated ? 'Show original' : (enabled ? 'Show translation' : 'AI Translate')}</Text>
-            </TouchableOpacity>
-            {bioTranslated && bioTranslated !== (user?.bio ?? '') ? (
-              <Text style={styles.translateMeta}>{`AI (${bioDetected}) → ${targetLang}`}</Text>
-            ) : null}
-          </View>
-        </View>
-        ) : (
-          <View style={styles.languageSection}>
-            <View style={styles.appLangHeader}>
-              <Globe color="#111827" size={18} />
-              <Text style={styles.langTitle}>{useI18n().t('settings.appLanguage') ?? 'App Language'}</Text>
+      <FlatList
+        data={sorted}
+        numColumns={NUM_COLUMNS}
+        keyExtractor={(item) => item.id}
+        columnWrapperStyle={{ gap: GAP, paddingHorizontal: 10 }}
+        contentContainerStyle={{ gap: GAP, paddingBottom: 30 }}
+        ListHeaderComponent={(
+          <View>
+            <View style={styles.planBanner}>
+              <View style={styles.planLeft}>
+                <Crown color={tier === 'plus' ? '#F59E0B' : '#6B7280'} size={18} />
+                <Text style={styles.planText}>{tier === 'plus' ? 'Premium/Pro active' : 'Free/Basic plan'}</Text>
+              </View>
+              {tier === 'free' ? (
+                <TouchableOpacity style={styles.upgradeBtn} onPress={() => setUpgradeVisible(true)} testID="open-upgrade">
+                  <Text style={styles.upgradeBtnText}>Upgrade</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
-            <View style={styles.segmented}>
-              {(Object.entries(supportedLocales) as [SupportedLocale, string][]).map(([code, label]) => {
-                const active = locale === code;
-                const flag = code === 'en' ? '🇺🇸' : code === 'es' ? '🇪🇸' : code === 'ja' ? '🇯🇵' : '🇨🇳';
-                return (
-                  <TouchableOpacity
-                    key={`seg-${code}`}
-                    onPress={() => { setLocale(code); const name = (supportedLocales as Record<SupportedLocale, string>)[code]; showToast(`${useI18n().t('common.switchedTo') ?? 'Switched to'} ${name}!`); }}
-                    style={[styles.segBtn, active && styles.segBtnActive]}
-                    testID={`profile-app-lang-${code}`}
-                  >
-                    <Text style={[styles.segText, active && styles.segTextActive]}>{flag} {label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <Text style={[styles.langTitle, { marginTop: 14 }]}>Translation settings</Text>
-            <View style={styles.langToggleRow}>
-              <Text style={styles.langToggleLabel}>Enable AI Translate</Text>
+            <View style={styles.tabBar}>
               <TouchableOpacity
-                accessibilityRole="switch"
-                accessibilityState={{ checked: enabled }}
-                onPress={() => setEnabled(!enabled)}
-                style={[styles.toggle, enabled ? styles.toggleOn : styles.toggleOff]}
-                testID="toggle-translate"
+                style={[styles.tabBtn, activeTab === 'profile' ? styles.tabBtnActive : undefined]}
+                onPress={() => setActiveTab('profile')}
+                testID="tab-profile"
               >
-                <View style={[styles.knob, enabled ? styles.knobOn : styles.knobOff]} />
+                <Text style={[styles.tabBtnText, activeTab === 'profile' ? styles.tabBtnTextActive : undefined]}>{t('profile.header')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tabBtn, activeTab === 'language' ? styles.tabBtnActive : undefined]}
+                onPress={() => setActiveTab('language')}
+                testID="tab-language"
+              >
+                <Text style={[styles.tabBtnText, activeTab === 'language' ? styles.tabBtnTextActive : undefined]}>{t('common.language') ?? 'Language'}</Text>
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.langSubtitle}>Target language</Text>
-            <View style={styles.langList}>
-              {Object.entries(supportedLocales).map(([code, label]) => {
-                const c = code as SupportedLocale;
-                const selected = targetLang === c;
-                return (
+            {activeTab === 'profile' ? (
+            <View style={styles.profileSection}>
+              <View style={styles.imageContainer}>
+                <Image
+                  source={{ uri: sorted.find(m => m.isPrimary)?.localUri || "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400" }}
+                  style={styles.profileImage}
+                />
+                <TouchableOpacity style={styles.editButton} onPress={() => pickFromLibrary('image')} testID="edit-avatar">
+                  <Edit color="#fff" size={16} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.userName}>{user?.name || "User"}, 25</Text>
+              <Text style={styles.userBio}>
+                {showTranslated && bioTranslated && bioTranslated !== (user?.bio ?? '') ? bioTranslated : (user?.bio || q?.bio || "Adventure seeker, coffee lover, and dog enthusiast")}
+              </Text>
+              <TouchableOpacity style={styles.qButton} onPress={() => router.push('/questionnaire' as any)} testID="open-questionnaire">
+                <Text style={styles.qButtonText}>{q ? 'Edit Profile Questionnaire' : 'Complete Profile Questionnaire'}</Text>
+              </TouchableOpacity>
+              <View style={styles.translateRow}>
+                <TouchableOpacity style={styles.translatePill} onPress={handleTranslateBio} testID="translate-bio">
+                  <Languages color={showTranslated ? '#10B981' : '#2563EB'} size={16} />
+                  <Text style={[styles.translateText, { color: showTranslated ? '#10B981' : '#2563EB' }]}>{loading ? 'Translating…' : showTranslated ? 'Show original' : (enabled ? 'Show translation' : 'AI Translate')}</Text>
+                </TouchableOpacity>
+                {bioTranslated && bioTranslated !== (user?.bio ?? '') ? (
+                  <Text style={styles.translateMeta}>{`AI (${bioDetected}) → ${targetLang}`}</Text>
+                ) : null}
+              </View>
+            </View>
+            ) : (
+              <View style={styles.languageSection}>
+                <View style={styles.appLangHeader}>
+                  <Globe color="#111827" size={18} />
+                  <Text style={styles.langTitle}>{t('settings.appLanguage') ?? 'App Language'}</Text>
+                </View>
+                <View style={styles.segmented}>
+                  {(Object.entries(supportedLocales) as [SupportedLocale, string][]).map(([code, label]) => {
+                    const active = locale === code;
+                    const flag = code === 'en' ? '🇺🇸' : code === 'es' ? '🇪🇸' : code === 'ja' ? '🇯🇵' : '🇨🇳';
+                    return (
+                      <TouchableOpacity
+                        key={`seg-${code}`}
+                        onPress={() => { setLocale(code); const name = (supportedLocales as Record<SupportedLocale, string>)[code]; showToast(`${t('common.switchedTo') ?? 'Switched to'} ${name}!`); }}
+                        style={[styles.segBtn, active && styles.segBtnActive]}
+                        testID={`profile-app-lang-${code}`}
+                      >
+                        <Text style={[styles.segText, active && styles.segTextActive]}>{flag} {label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <Text style={[styles.langTitle, { marginTop: 14 }]}>Translation settings</Text>
+                <View style={styles.langToggleRow}>
+                  <Text style={styles.langToggleLabel}>Enable AI Translate</Text>
                   <TouchableOpacity
-                    key={code}
-                    style={[styles.langItem, selected ? styles.langItemActive : undefined]}
-                    onPress={() => setTargetLang(c)}
-                    testID={`lang-${code}`}
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: enabled }}
+                    onPress={() => setEnabled(!enabled)}
+                    style={[styles.toggle, enabled ? styles.toggleOn : styles.toggleOff]}
+                    testID="toggle-translate"
                   >
-                    <Text style={[styles.langItemText, selected ? styles.langItemTextActive : undefined]}>{label}</Text>
-                    {selected ? <Check color="#10B981" size={18} /> : null}
+                    <View style={[styles.knob, enabled ? styles.knobOn : styles.knobOff]} />
                   </TouchableOpacity>
+                </View>
+
+                <Text style={styles.langSubtitle}>Target language</Text>
+                <View style={styles.langList}>
+                  {Object.entries(supportedLocales).map(([code, label]) => {
+                    const c = code as SupportedLocale;
+                    const selected = targetLang === c;
+                    return (
+                      <TouchableOpacity
+                        key={code}
+                        style={[styles.langItem, selected ? styles.langItemActive : undefined]}
+                        onPress={() => setTargetLang(c)}
+                        testID={`lang-${code}`}
+                      >
+                        <Text style={[styles.langItemText, selected ? styles.langItemTextActive : undefined]}>{label}</Text>
+                        {selected ? <Check color="#10B981" size={18} /> : null}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <View style={styles.langHintBox}>
+                  <Text style={styles.langHintText}>Your bio and chats can be translated to your target language.</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Questionnaire Summary */}
+            <View style={styles.qCard}>
+              <View style={styles.qHeaderRow}>
+                <Text style={styles.qCardTitle}>Profile Questionnaire</Text>
+                <Text style={styles.qProgressText}>{qLoading ? 'Loading…' : `${completionPct}%`}</Text>
+              </View>
+              <View style={styles.qProgressBarOuter}>
+                <View style={[styles.qProgressBarInner, { width: `${completionPct}%` }]} />
+              </View>
+              <View style={styles.qChipsRow}>
+                {(q?.hobbies ?? []).slice(0, 4).map((h) => (
+                  <View key={h} style={styles.qChip}><Text style={styles.qChipText}>{h}</Text></View>
+                ))}
+                {(q?.interests ?? []).slice(0, 4).map((i) => (
+                  <View key={i} style={styles.qChip}><Text style={styles.qChipText}>{i}</Text></View>
+                ))}
+              </View>
+              <View style={styles.qMetaRow}>
+                {q?.preferredAgeRange ? (
+                  <Text style={styles.qMetaText}>{`Age: ${q.preferredAgeRange.min}-${q.preferredAgeRange.max}`}</Text>
+                ) : null}
+                {q?.lookingFor ? (
+                  <Text style={styles.qMetaText}>{`Looking: ${q.lookingFor}`}</Text>
+                ) : null}
+              </View>
+              <TouchableOpacity style={styles.qEditBtn} onPress={() => router.push('/questionnaire' as any)} testID="edit-questionnaire-inline">
+                <Text style={styles.qEditText}>{q ? 'Edit answers' : 'Start now'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.statsContainer}>
+              {stats.map((stat, index) => {
+                const Icon = stat.icon;
+                return (
+                  <View key={index} style={styles.statItem}>
+                    <Icon color={stat.color} size={24} />
+                    <Text style={styles.statValue}>{stat.value}</Text>
+                    <Text style={styles.statLabel}>{stat.label}</Text>
+                  </View>
                 );
               })}
             </View>
 
-            <View style={styles.langHintBox}>
-              <Text style={styles.langHintText}>Your bio and chats can be translated to your target language.</Text>
+            <View style={styles.mediaActions}>
+              <TouchableOpacity style={[styles.actionButton, styles.actionPrimary]} onPress={() => capturePhoto()} testID="capture-photo">
+                <Camera color="#fff" size={18} />
+                <Text style={styles.actionText}>Capture Photo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButton} onPress={() => pickFromLibrary('image')} testID="pick-image">
+                <ImageIcon color="#333" size={18} />
+                <Text style={styles.actionTextDark}>Add Photo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButton} onPress={() => captureVideo()} testID="capture-video">
+                <Camera color="#333" size={18} />
+                <Text style={styles.actionTextDark}>Capture Video</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButton} onPress={() => pickFromLibrary('video')} testID="pick-video">
+                <ImageIcon color="#333" size={18} />
+                <Text style={styles.actionTextDark}>Add Video</Text>
+              </TouchableOpacity>
             </View>
+
+            <View style={{ paddingHorizontal: 10, marginBottom: 12 }}>
+              <PrivacyNote testID="privacy-note-profile" />
+            </View>
+
+            <Text style={styles.galleryHeader}>Gallery</Text>
           </View>
         )}
-
-        {/* Questionnaire Summary */}
-        <View style={styles.qCard}>
-          <View style={styles.qHeaderRow}>
-            <Text style={styles.qCardTitle}>Profile Questionnaire</Text>
-            <Text style={styles.qProgressText}>{qLoading ? 'Loading…' : `${completionPct}%`}</Text>
-          </View>
-          <View style={styles.qProgressBarOuter}>
-            <View style={[styles.qProgressBarInner, { width: `${completionPct}%` }]} />
-          </View>
-          <View style={styles.qChipsRow}>
-            {(q?.hobbies ?? []).slice(0, 4).map((h) => (
-              <View key={h} style={styles.qChip}><Text style={styles.qChipText}>{h}</Text></View>
-            ))}
-            {(q?.interests ?? []).slice(0, 4).map((i) => (
-              <View key={i} style={styles.qChip}><Text style={styles.qChipText}>{i}</Text></View>
-            ))}
-          </View>
-          <View style={styles.qMetaRow}>
-            {q?.preferredAgeRange ? (
-              <Text style={styles.qMetaText}>{`Age: ${q.preferredAgeRange.min}-${q.preferredAgeRange.max}`}</Text>
-            ) : null}
-            {q?.lookingFor ? (
-              <Text style={styles.qMetaText}>{`Looking: ${q.lookingFor}`}</Text>
-            ) : null}
-          </View>
-          <TouchableOpacity style={styles.qEditBtn} onPress={() => router.push('/questionnaire' as any)} testID="edit-questionnaire-inline">
-            <Text style={styles.qEditText}>{q ? 'Edit answers' : 'Start now'}</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.statsContainer}>
-          {stats.map((stat, index) => {
-            const Icon = stat.icon;
-            return (
-              <View key={index} style={styles.statItem}>
-                <Icon color={stat.color} size={24} />
-                <Text style={styles.statValue}>{stat.value}</Text>
-                <Text style={styles.statLabel}>{stat.label}</Text>
-              </View>
-            );
-          })}
-        </View>
-
-        <View style={styles.mediaActions}>
-          <TouchableOpacity style={[styles.actionButton, styles.actionPrimary]} onPress={() => capturePhoto()} testID="capture-photo">
-            <Camera color="#fff" size={18} />
-            <Text style={styles.actionText}>Capture Photo</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={() => pickFromLibrary('image')} testID="pick-image">
-            <ImageIcon color="#333" size={18} />
-            <Text style={styles.actionTextDark}>Add Photo</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={() => captureVideo()} testID="capture-video">
-            <Camera color="#333" size={18} />
-            <Text style={styles.actionTextDark}>Capture Video</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={() => pickFromLibrary('video')} testID="pick-video">
-            <ImageIcon color="#333" size={18} />
-            <Text style={styles.actionTextDark}>Add Video</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={{ paddingHorizontal: 10, marginBottom: 12 }}>
-          <PrivacyNote testID="privacy-note-profile" />
-        </View>
-
-        <Text style={styles.galleryHeader}>Gallery</Text>
-        <FlatList
-          data={sorted}
-          numColumns={NUM_COLUMNS}
-          keyExtractor={(item) => item.id}
-          columnWrapperStyle={{ gap: GAP, paddingHorizontal: 10 }}
-          contentContainerStyle={{ gap: GAP, paddingBottom: 30 }}
-          renderItem={({ item }) => {
-            return (
-              <View style={{ width: TILE, height: TILE, borderRadius: 12, overflow: 'hidden', backgroundColor: '#eee' }}>
-                {item.type === 'image' ? (
-                  <Image source={{ uri: item.localUri }} style={{ width: '100%', height: '100%' }} />
-                ) : (
-                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111' }}>
-                    <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
-                      <TrianglePlayIcon />
-                    </View>
-                    <Text style={{ color: '#fff', marginTop: 6, fontSize: 12 }}>Video</Text>
+        renderItem={({ item }) => {
+          return (
+            <View style={{ width: TILE, height: TILE, borderRadius: 12, overflow: 'hidden', backgroundColor: '#eee' }}>
+              {item.type === 'image' ? (
+                <Image source={{ uri: item.localUri }} style={{ width: '100%', height: '100%' }} />
+              ) : (
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111' }}>
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
+                    <TrianglePlayIcon />
                   </View>
-                )}
-                <View style={styles.tileOverlay}>
-                  {item.isPrimary ? (
-                    <View style={styles.primaryBadge}>
-                      <Crown color="#fff" size={14} />
-                    </View>
-                  ) : null}
-                  <View style={styles.tileActions}>
-                    <TouchableOpacity style={styles.tileBtn} onPress={() => setPrimary(item.id)} testID={`make-primary-${item.id}`}>
-                      <Upload color="#fff" size={14} />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.tileBtn} onPress={() => removeItem(item.id)} testID={`remove-${item.id}`}>
-                      <Trash color="#fff" size={14} />
-                    </TouchableOpacity>
+                  <Text style={{ color: '#fff', marginTop: 6, fontSize: 12 }}>Video</Text>
+                </View>
+              )}
+              <View style={styles.tileOverlay}>
+                {item.isPrimary ? (
+                  <View style={styles.primaryBadge}>
+                    <Crown color="#fff" size={14} />
                   </View>
+                ) : null}
+                <View style={styles.tileActions}>
+                  <TouchableOpacity style={styles.tileBtn} onPress={() => setPrimary(item.id)} testID={`make-primary-${item.id}`}>
+                    <Upload color="#fff" size={14} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.tileBtn} onPress={() => removeItem(item.id)} testID={`remove-${item.id}`}>
+                    <Trash color="#fff" size={14} />
+                  </TouchableOpacity>
                 </View>
               </View>
-            );
-          }}
-        />
-
-        <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={handleLogout}
-          testID="logout-button"
-        >
-          <LogOut color="#FF4458" size={20} />
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
-      </ScrollView>
+            </View>
+          );
+        }}
+        ListFooterComponent={(
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={handleLogout}
+            testID="logout-button"
+          >
+            <LogOut color="#FF4458" size={20} />
+            <Text style={styles.logoutText}>Logout</Text>
+          </TouchableOpacity>
+        )}
+        showsVerticalScrollIndicator={false}
+      />
       <UpgradeModal visible={upgradeVisible} onClose={() => setUpgradeVisible(false)} testID="upgrade-modal" />
     </SafeAreaView>
   );

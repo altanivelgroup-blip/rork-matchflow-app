@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -6,13 +6,14 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Platform,
+  Platform, ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { Camera, ArrowLeft } from "lucide-react-native";
+import { Camera, ArrowLeft, MapPin, Loader2 } from "lucide-react-native";
 import { useAuth } from "@/contexts/AuthContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as ExpoLocation from "expo-location";
 
 export default function ProfileSetupScreen() {
   const [bio, setBio] = useState("");
@@ -20,6 +21,9 @@ export default function ProfileSetupScreen() {
   const [interests, setInterests] = useState("");
   const [verified, setVerified] = useState<boolean | null>(null);
   const { login } = useAuth();
+  const [locLoading, setLocLoading] = useState<boolean>(false);
+  const [location, setLocation] = useState<{ lat: number; lon: number; city?: string } | null>(null);
+  const [locError, setLocError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -42,12 +46,67 @@ export default function ProfileSetupScreen() {
     return () => { mounted = false; };
   }, []);
 
+  const requestAndCaptureLocation = useCallback(async () => {
+    try {
+      setLocError(null);
+      setLocLoading(true);
+      if (Platform.OS === 'web') {
+        await new Promise<void>((resolve, reject) => {
+          if (!('geolocation' in navigator)) {
+            reject(new Error('Geolocation not supported'));
+            return;
+          }
+          navigator.geolocation.getCurrentPosition(
+            async (pos) => {
+              try {
+                const coords = pos.coords;
+                const loc = { lat: coords.latitude, lon: coords.longitude };
+                setLocation(loc);
+                await AsyncStorage.setItem('user_location_v1', JSON.stringify(loc));
+                resolve();
+              } catch (e) {
+                reject(e);
+              }
+            },
+            (err) => reject(err),
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+          );
+        });
+      } else {
+        const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          throw new Error('Location permission denied');
+        }
+        const pos = await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.High });
+        const coords = pos.coords;
+        let city: string | undefined = undefined;
+        try {
+          const rev = await ExpoLocation.reverseGeocodeAsync({ latitude: coords.latitude, longitude: coords.longitude });
+          city = rev?.[0]?.city ?? rev?.[0]?.subregion ?? undefined;
+        } catch (e) {
+          console.log('[ProfileSetup] reverse geocode error', e);
+        }
+        const loc = { lat: coords.latitude, lon: coords.longitude, city };
+        setLocation(loc);
+        await AsyncStorage.setItem('user_location_v1', JSON.stringify(loc));
+      }
+    } catch (e: unknown) {
+      console.log('[ProfileSetup] location error', e);
+      const msg = e instanceof Error ? e.message : 'Could not get location';
+      setLocError(msg);
+    } finally {
+      setLocLoading(false);
+    }
+  }, []);
+
   const handleComplete = async () => {
     if (!verified) return;
     try {
       const faceVectorRaw = await AsyncStorage.getItem('face_vector_v1');
       const verificationScoreRaw = await AsyncStorage.getItem('verification_score_v1');
       const faceVector = faceVectorRaw ? (JSON.parse(faceVectorRaw) as number[]) : undefined;
+      const storedLocRaw = await AsyncStorage.getItem('user_location_v1');
+      const storedLoc = storedLocRaw ? (JSON.parse(storedLocRaw) as { lat: number; lon: number; city?: string }) : undefined;
       const faceScoreFromVerification = verificationScoreRaw ? Number(verificationScoreRaw) : undefined;
       await login({ 
         email: "user@example.com", 
@@ -55,8 +114,16 @@ export default function ProfileSetupScreen() {
         bio,
         age: parseInt(age) || 25,
         interests: interests.split(",").map(i => i.trim()).filter(Boolean),
+        location: storedLoc ?? location ?? undefined,
+        faceVector: faceVector ?? undefined,
+        faceScoreFromVerification: typeof faceScoreFromVerification === 'number' ? faceScoreFromVerification : undefined,
       });
       await AsyncStorage.setItem('user_face_vector_v1', JSON.stringify(faceVector ?? []));
+      if (storedLocRaw) {
+        // already saved
+      } else if (location) {
+        await AsyncStorage.setItem('user_location_v1', JSON.stringify(location));
+      }
       if (typeof faceScoreFromVerification === 'number' && !Number.isNaN(faceScoreFromVerification)) {
         await AsyncStorage.setItem('user_face_score_v1', String(faceScoreFromVerification));
       }
@@ -158,6 +225,27 @@ export default function ProfileSetupScreen() {
         >
           <Text style={styles.skipButtonText}>Skip for now</Text>
         </TouchableOpacity>
+        <View style={styles.locationCard}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <MapPin color={locError ? '#b91c1c' : location ? '#22c55e' : '#666'} size={18} />
+            <Text style={styles.locationTitle}>Location</Text>
+          </View>
+          {location ? (
+            <Text style={styles.locationText}>{location.city ? `${location.city} · ` : ''}{location.lat.toFixed(4)}, {location.lon.toFixed(4)}</Text>
+          ) : locError ? (
+            <Text style={[styles.locationText, { color: '#b91c1c' }]}>Permission needed or unavailable. You can continue, but matches may be less accurate.</Text>
+          ) : (
+            <Text style={styles.locationText}>Share your location for better matches nearby.</Text>
+          )}
+          <TouchableOpacity
+            style={[styles.locButton, locLoading ? styles.locButtonDisabled : undefined]}
+            onPress={requestAndCaptureLocation}
+            disabled={locLoading}
+            testID="capture-location"
+          >
+            {locLoading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.locButtonText}>{location ? 'Update Location' : 'Use my location'}</Text>}
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -249,4 +337,33 @@ const styles = StyleSheet.create({
     color: "#999",
     fontSize: 14,
   },
+  locationCard: {
+    marginTop: 10,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  locationTitle: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  locationText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  locButton: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    backgroundColor: '#111827',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  locButtonDisabled: { opacity: 0.6 },
+  locButtonText: { color: '#fff', fontWeight: '700' },
 });

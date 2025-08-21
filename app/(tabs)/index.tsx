@@ -404,6 +404,12 @@ export default function DiscoverScreen() {
         )}
       </View>
 
+      {(!canSwipe && limits.dailySwipes != null) ? (
+        <View style={styles.upgradeNotice} testID="upgrade-notice">
+          <Text style={styles.upgradeNoticeText}>Upgrade to see more matches!</Text>
+        </View>
+      ) : null}
+
       {(() => {
         const scores = aiQuery.data?.scores ?? [];
         const byId: Record<string, number> = {};
@@ -814,6 +820,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   adText: { color: '#6B7280', fontSize: 12, fontWeight: '700' },
+  upgradeNotice: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    backgroundColor: '#FFF1F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    padding: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  upgradeNoticeText: { color: '#B91C1C', fontSize: 12, fontWeight: '900' },
   translatedNote: {
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(167,243,208,0.25)',

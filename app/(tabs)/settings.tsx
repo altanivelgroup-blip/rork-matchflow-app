@@ -1,16 +1,23 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Stack } from 'expo-router';
-import { Languages, ToggleLeft, ToggleRight, Crown } from 'lucide-react-native';
+import { Languages, ToggleLeft, ToggleRight, Crown, WifiOff, RefreshCw, CalendarX2 } from 'lucide-react-native';
 import { useTranslate } from '@/contexts/TranslateContext';
 import { supportedLocales, SupportedLocale } from '@/lib/i18n';
 import { useMembership } from '@/contexts/MembershipContext';
 
 function MembershipSection() {
-  const { tier, setTier, limits } = useMembership();
+  const { tier, setTier, limits, subscription, cancel, restore, refresh } = useMembership();
+  const statusText = (() => {
+    if (subscription.status === 'active') return `Active • Renews ${subscription.renewsAtISO ? new Date(subscription.renewsAtISO).toDateString() : ''}`;
+    if (subscription.status === 'expired') return 'Expired — downgraded to Free';
+    if (subscription.status === 'canceled') return 'Canceled — access until end of period';
+    return 'Free plan';
+  })();
   return (
     <View style={{ marginTop: 12 }}>
       <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 8 }}>Current plan: {tier === 'free' ? 'Free/Basic' : 'Plus'}</Text>
+      <Text style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 8 }}>{statusText}</Text>
       <View style={{ gap: 8 }}>
         <PlanRow
           title="Free/Basic"
@@ -24,6 +31,23 @@ function MembershipSection() {
           active={tier === 'plus'}
           onPress={async () => { await setTier('plus'); }}
         />
+      </View>
+      <View style={styles.subActions}>
+        <TouchableOpacity onPress={refresh} style={styles.subBtn} testID="sub-refresh">
+          <RefreshCw color="#111827" size={14} />
+          <Text style={styles.subBtnText}>Refresh status</Text>
+        </TouchableOpacity>
+        {tier === 'plus' ? (
+          <TouchableOpacity onPress={cancel} style={[styles.subBtn, styles.warnBtn]} testID="sub-cancel">
+            <CalendarX2 color="#B91C1C" size={14} />
+            <Text style={[styles.subBtnText, { color: '#B91C1C' }]}>Cancel</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity onPress={restore} style={styles.subBtn} testID="sub-restore">
+            <Crown color="#F59E0B" size={14} />
+            <Text style={styles.subBtnText}>Restore Premium</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -42,10 +66,34 @@ export default function SettingsScreen() {
   const { enabled, setEnabled, targetLang, setTargetLang } = useTranslate();
   const entries = useMemo(() => Object.entries(supportedLocales) as [SupportedLocale, string][], []);
   const [expanded, setExpanded] = useState<boolean>(true);
+  const [offline, setOffline] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const nav: any = typeof navigator !== 'undefined' ? navigator : undefined;
+      setOffline(Boolean(nav && nav.onLine === false));
+      const on = () => setOffline(false);
+      const off = () => setOffline(true);
+      window.addEventListener('online', on);
+      window.addEventListener('offline', off);
+      return () => {
+        window.removeEventListener('online', on);
+        window.removeEventListener('offline', off);
+      };
+    }
+  }, []);
 
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ title: 'Settings' }} />
+
+      {offline ? (
+        <View style={styles.offlineBar} testID="offline-bar">
+          <WifiOff color="#991B1B" size={16} />
+          <Text style={styles.offlineText}>Offline — changes will sync when you're back online.</Text>
+        </View>
+      ) : null}
 
       <View style={styles.card}>
         <View style={styles.row}>
@@ -139,4 +187,10 @@ const styles = StyleSheet.create({
   planSubtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
   planSubtitleActive: { color: '#047857' },
   tipText: { fontSize: 12, color: '#065F46', fontWeight: '600' },
+  subActions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, flexWrap: 'wrap' },
+  subBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB' },
+  subBtnText: { fontSize: 12, color: '#111827', fontWeight: '700' },
+  warnBtn: { backgroundColor: '#FEF2F2', borderColor: '#FECACA' },
+  offlineBar: { margin: 16, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA', padding: 10, borderRadius: 10 },
+  offlineText: { color: '#991B1B', fontSize: 12, fontWeight: '800', flex: 1 },
 });

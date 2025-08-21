@@ -1,7 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { backend } from '@/lib/backend';
+import { backend, type SubscriptionInfo } from '@/lib/backend';
 import { useAuth } from '@/contexts/AuthContext';
 
 export type MembershipTier = 'free' | 'plus';
@@ -27,6 +27,10 @@ interface MembershipContextType {
   canSwipe: boolean;
   incSwipe: () => Promise<void>;
   resetSwipeIfNewDay: () => Promise<void>;
+  subscription: SubscriptionInfo;
+  cancel: () => Promise<void>;
+  restore: () => Promise<void>;
+  refresh: () => Promise<void>;
 }
 
 const STORAGE_TIER = 'membership:tier:v1';
@@ -55,21 +59,25 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
   const { user } = useAuth();
   const [tier, setTierState] = useState<MembershipTier>('free');
   const [swipeState, setSwipeState] = useState<SwipeState>({ dateISO: new Date().toISOString().slice(0, 10), count: 0 });
+  const [subscription, setSubscription] = useState<SubscriptionInfo>({ status: 'none', renewsAtISO: null });
+
+  const refresh = useCallback(async () => {
+    try {
+      const uid = user?.email ?? 'guest';
+      const snap = await backend.fetchMembership(uid);
+      setTierState(snap.tier);
+      setSwipeState(snap.swipeState);
+      setSubscription(snap.subscription);
+      await AsyncStorage.setItem(STORAGE_TIER, snap.tier);
+      await AsyncStorage.setItem(STORAGE_SWIPE, JSON.stringify(snap.swipeState));
+    } catch (e) {
+      console.log('[Membership] refresh error', e);
+    }
+  }, [user?.email]);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const uid = user?.email ?? 'guest';
-        const snap = await backend.fetchMembership(uid);
-        setTierState(snap.tier);
-        setSwipeState(snap.swipeState);
-        await AsyncStorage.setItem(STORAGE_TIER, snap.tier);
-        await AsyncStorage.setItem(STORAGE_SWIPE, JSON.stringify(snap.swipeState));
-      } catch (e) {
-        console.log('[Membership] load error', e);
-      }
-    })();
-  }, [user?.email]);
+    refresh();
+  }, [refresh]);
 
   const saveTier = useCallback(async (t: MembershipTier) => {
     try {
@@ -86,6 +94,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
       const uid = user?.email ?? 'guest';
       const snap = await backend.setTier(uid, t);
       setSwipeState(snap.swipeState);
+      setSubscription(snap.subscription);
       await AsyncStorage.setItem(STORAGE_SWIPE, JSON.stringify(snap.swipeState));
     } catch (e) {
       console.log('[Membership] backend setTier error', e);
@@ -121,6 +130,30 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
     }
   }, [user?.email]);
 
+  const cancel = useCallback(async () => {
+    try {
+      const uid = user?.email ?? 'guest';
+      const snap = await backend.cancelSubscription(uid);
+      setTierState(snap.tier);
+      setSubscription(snap.subscription);
+      setSwipeState(snap.swipeState);
+    } catch (e) {
+      console.log('[Membership] cancel error', e);
+    }
+  }, [user?.email]);
+
+  const restore = useCallback(async () => {
+    try {
+      const uid = user?.email ?? 'guest';
+      const snap = await backend.restoreSubscription(uid);
+      setTierState(snap.tier);
+      setSubscription(snap.subscription);
+      setSwipeState(snap.swipeState);
+    } catch (e) {
+      console.log('[Membership] restore error', e);
+    }
+  }, [user?.email]);
+
   const limits = limitsFor(tier);
   const canSwipe = limits.dailySwipes == null || swipeState.count < (limits.dailySwipes ?? 0);
 
@@ -132,7 +165,11 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
     canSwipe,
     incSwipe,
     resetSwipeIfNewDay,
-  }), [tier, setTier, limits, swipeState, canSwipe, incSwipe, resetSwipeIfNewDay]);
+    subscription,
+    cancel,
+    restore,
+    refresh,
+  }), [tier, setTier, limits, swipeState, canSwipe, incSwipe, resetSwipeIfNewDay, subscription, cancel, restore, refresh]);
 
   return value;
 });

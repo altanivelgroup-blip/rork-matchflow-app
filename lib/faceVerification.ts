@@ -331,6 +331,28 @@ export async function runFaceVerification(input: VerificationInput): Promise<Ver
   return { ok: false, reason: 'Unsupported verification mode.' };
 }
 
+export function faceVectorFromDetails(details?: Record<string, unknown> | null): number[] | null {
+  try {
+    if (!details) return null;
+    const aFront = (details as Record<string, unknown>).aHashFront as unknown as string | undefined;
+    const bits = typeof aFront === 'string' && aFront.length >= 64 ? aFront.slice(0, 64) : null;
+    if (!bits) return null;
+    const vec: number[] = [];
+    for (let i = 0; i < bits.length; i++) {
+      const b = bits[i] === '1' ? 1 : 0;
+      vec.push(b);
+    }
+    let norm = 0;
+    for (let i = 0; i < vec.length; i++) norm += vec[i] * vec[i];
+    norm = Math.sqrt(norm);
+    if (norm === 0) return vec;
+    return vec.map((v) => v / norm);
+  } catch (e) {
+    console.log('[faceVerification] faceVectorFromDetails error', e);
+    return null;
+  }
+}
+
 export async function verifySingleImage(uri: string): Promise<VerificationResult> {
   try {
     if (Platform.OS === 'web') {

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, { createContext, useContext, useMemo, useState, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 interface User {
@@ -7,6 +7,9 @@ interface User {
   bio?: string;
   age?: number;
   interests?: string[];
+  location?: { lat: number; lon: number; city?: string };
+  faceVector?: number[];
+  faceScoreFromVerification?: number;
 }
 
 interface AuthContextType {
@@ -31,15 +34,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.removeItem("user");
   };
 
+  const value = useMemo<AuthContextType>(() => ({
+    user,
+    login,
+    logout,
+    isAuthenticated: !!user,
+  }), [user]);
+
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        login,
-        logout,
-        isAuthenticated: !!user,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

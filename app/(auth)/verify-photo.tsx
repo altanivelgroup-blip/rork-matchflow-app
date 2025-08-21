@@ -6,7 +6,7 @@ import { Camera as CameraIcon, ArrowLeft, Timer as TimerIcon, RefreshCcw, CheckC
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
-import { runFaceVerification, configureFaceVerification } from '@/lib/faceVerification';
+import { runFaceVerification, configureFaceVerification, faceVectorFromDetails } from '@/lib/faceVerification';
 import PrivacyNote from '@/components/PrivacyNote';
 
 type PoseKey = 'front' | 'left' | 'right';
@@ -141,7 +141,7 @@ export default function VerifyPhotoScreen() {
 
   const allReady = useMemo(() => !!(photos.front && photos.left && photos.right), [photos]);
 
-  const verifyPhotos = useCallback(async (): Promise<{ ok: boolean; reason?: string }> => {
+  const verifyPhotos = useCallback(async (): Promise<{ ok: boolean; reason?: string; score?: number; faceVector?: number[] | null }> => {
     try {
       setVerifying(true);
       setVerificationError(null);
@@ -175,7 +175,8 @@ export default function VerifyPhotoScreen() {
       if (!external.ok) {
         return { ok: false, reason: external.reason ?? 'Face verification failed.' };
       }
-      return { ok: true };
+      const vec = faceVectorFromDetails(external.details ?? null);
+      return { ok: true, score: external.score, faceVector: vec };
     } catch (e) {
       console.log('[VerifyPhoto] verify error', e);
       return { ok: false, reason: 'Unexpected verification error.' };
@@ -209,6 +210,12 @@ export default function VerifyPhotoScreen() {
     try {
       await AsyncStorage.setItem('verification_photos_v1', JSON.stringify(photos));
       await AsyncStorage.setItem('verification_passed_v1', 'true');
+      if (typeof result.score === 'number') {
+        await AsyncStorage.setItem('verification_score_v1', String(result.score));
+      }
+      if (result.faceVector && Array.isArray(result.faceVector)) {
+        await AsyncStorage.setItem('face_vector_v1', JSON.stringify(result.faceVector));
+      }
     } catch (e) {
       console.log('[VerifyPhoto] persist photos error', e);
     }

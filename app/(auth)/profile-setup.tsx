@@ -42,15 +42,27 @@ export default function ProfileSetupScreen() {
     return () => { mounted = false; };
   }, []);
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     if (!verified) return;
-    login({ 
-      email: "user@example.com", 
-      name: "User",
-      bio,
-      age: parseInt(age) || 25,
-      interests: interests.split(",").map(i => i.trim()).filter(Boolean)
-    });
+    try {
+      const faceVectorRaw = await AsyncStorage.getItem('face_vector_v1');
+      const verificationScoreRaw = await AsyncStorage.getItem('verification_score_v1');
+      const faceVector = faceVectorRaw ? (JSON.parse(faceVectorRaw) as number[]) : undefined;
+      const faceScoreFromVerification = verificationScoreRaw ? Number(verificationScoreRaw) : undefined;
+      await login({ 
+        email: "user@example.com", 
+        name: "User",
+        bio,
+        age: parseInt(age) || 25,
+        interests: interests.split(",").map(i => i.trim()).filter(Boolean),
+      });
+      await AsyncStorage.setItem('user_face_vector_v1', JSON.stringify(faceVector ?? []));
+      if (typeof faceScoreFromVerification === 'number' && !Number.isNaN(faceScoreFromVerification)) {
+        await AsyncStorage.setItem('user_face_score_v1', String(faceScoreFromVerification));
+      }
+    } catch (e) {
+      console.log('[ProfileSetup] persist face data error', e);
+    }
     router.replace("/(tabs)");
   };
 

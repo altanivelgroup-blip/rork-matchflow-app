@@ -14,15 +14,33 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Heart } from "lucide-react-native";
 import { useAuth } from "@/contexts/AuthContext";
+import * as Location from 'expo-location';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const { login } = useAuth();
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (email && password) {
-      login({ email, name: email.split("@")[0] });
+      let loc: { lat: number; lon: number; city?: string } | undefined;
+      try {
+        if (Platform.OS === 'web' && navigator.geolocation) {
+          const coords = await new Promise<GeolocationCoordinates>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition((pos) => resolve(pos.coords), (err) => reject(err), { enableHighAccuracy: true, timeout: 8000 });
+          });
+          loc = { lat: coords.latitude, lon: coords.longitude };
+        } else {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            loc = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+          }
+        }
+      } catch (e) {
+        console.log('[Login] location error', e);
+      }
+      await login({ email, name: email.split("@")[0], location: loc });
       router.replace("/(tabs)");
     }
   };

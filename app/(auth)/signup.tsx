@@ -14,6 +14,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
+import * as Location from 'expo-location';
 
 export default function SignupScreen() {
   const [name, setName] = useState<string>("");
@@ -21,7 +22,7 @@ export default function SignupScreen() {
   const [password, setPassword] = useState<string>("");
   const [confirmPassword, setConfirmPassword] = useState<string>("");
 
-  const handleSignup = () => {
+  const handleSignup = async () => {
     if (!name || !email || !password || !confirmPassword) {
       Alert.alert('Missing info', 'Please fill all fields.');
       return;
@@ -29,6 +30,15 @@ export default function SignupScreen() {
     if (password !== confirmPassword) {
       Alert.alert('Password mismatch', 'Passwords do not match.');
       return;
+    }
+    try {
+      if (Platform.OS === 'web' && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(() => {}, () => {}, { enableHighAccuracy: true, timeout: 5000 });
+      } else {
+        await Location.requestForegroundPermissionsAsync();
+      }
+    } catch (e) {
+      console.log('[Signup] location preflight error', e);
     }
     router.push("/verify-photo" as any);
   };

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -8,21 +8,63 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { Heart } from "lucide-react-native";
+import { Heart, Apple, BadgeCheck, Globe, Mail, Lock, LogIn, MountainSnow } from "lucide-react-native";
 import { useAuth } from "@/contexts/AuthContext";
 import * as Location from 'expo-location';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { i18n, supportedLocales, type SupportedLocale, detectDeviceLocale } from "@/lib/i18n";
+import en from '@/locales/en';
+import es from '@/locales/es';
+import zhHans from '@/locales/zh-Hans';
+import ja from '@/locales/ja';
+
+const LOCALE_KEY = 'app:locale';
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
+  const [locale, setLocale] = useState<SupportedLocale>(detectDeviceLocale());
   const { login } = useAuth();
 
+  useEffect(() => {
+    i18n.translations = { en, es, 'zh-Hans': zhHans, ja } as any;
+    const init = async () => {
+      const saved = await AsyncStorage.getItem(LOCALE_KEY);
+      const next = (saved as SupportedLocale) ?? locale;
+      i18n.locale = next;
+      setLocale(next);
+    };
+    init();
+  }, []);
+
+  useEffect(() => {
+    i18n.locale = locale;
+    AsyncStorage.setItem(LOCALE_KEY, locale).catch(() => {});
+  }, [locale]);
+
+  const t = useMemo(() => i18n, [locale]);
+
+  const emailValid = useMemo(() => /[^@\s]+@[^@\s]+\.[^@\s]+/.test(email), [email]);
+  const passwordStrong = useMemo(() => password.length >= 6, [password]);
+
   const handleLogin = async () => {
-    if (email && password) {
+    if (!emailValid) {
+      Alert.alert(t.t('errors.invalidEmail') ?? 'Invalid email address');
+      return;
+    }
+    if (!passwordStrong) {
+      Alert.alert('Weak password', 'Use at least 6 characters');
+      return;
+    }
+    setLoading(true);
+    try {
       let loc: { lat: number; lon: number; city?: string } | undefined;
       try {
         if (Platform.OS === 'web' && navigator.geolocation) {
@@ -42,6 +84,34 @@ export default function LoginScreen() {
       }
       await login({ email, name: email.split("@")[0], location: loc });
       router.replace("/(tabs)");
+    } catch (e) {
+      Alert.alert('Sign in failed', 'Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogle = async () => {
+    setLoading(true);
+    try {
+      await login({ email: `google_user@example.com`, name: 'Google User' });
+      router.replace('/(tabs)');
+    } catch (e) {
+      Alert.alert('Google sign-in failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApple = async () => {
+    setLoading(true);
+    try {
+      await login({ email: `apple_user@example.com`, name: 'Apple User' });
+      router.replace('/(tabs)');
+    } catch (e) {
+      Alert.alert('Apple sign-in failed');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -59,53 +129,83 @@ export default function LoginScreen() {
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
+            <View style={styles.langRow}>
+              <Globe color="#fff" size={16} />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.langChips}>
+                {(Object.keys(supportedLocales) as SupportedLocale[]).map((code) => (
+                  <TouchableOpacity key={code} style={[styles.langChip, locale === code ? styles.langChipActive : undefined]} onPress={() => setLocale(code)} testID={`lang-${code}`}>
+                    <Text style={[styles.langChipText, locale === code ? styles.langChipTextActive : undefined]}>{supportedLocales[code]}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
             <View style={styles.logoContainer}>
               <Heart color="white" size={60} fill="white" />
-              <Text style={styles.appName}>MatchFlow</Text>
+              <Text style={styles.appName}>{t.t('common.appName') ?? 'MatchFlow'}</Text>
               <Text style={styles.tagline}>Find your perfect match</Text>
             </View>
 
             <View style={styles.formContainer}>
-              <TextInput
-                style={styles.input}
-                placeholder="Email"
-                placeholderTextColor="#999"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                testID="email-input"
-              />
+              <View style={styles.inputRow}>
+                <Mail color="#999" size={18} />
+                <TextInput
+                  style={styles.input}
+                  placeholder={t.t('auth.email') ?? 'Email'}
+                  placeholderTextColor="#999"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  testID="email-input"
+                />
+              </View>
 
-              <TextInput
-                style={styles.input}
-                placeholder="Password"
-                placeholderTextColor="#999"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                testID="password-input"
-              />
+              <View style={styles.inputRow}>
+                <Lock color="#999" size={18} />
+                <TextInput
+                  style={styles.input}
+                  placeholder={t.t('auth.password') ?? 'Password'}
+                  placeholderTextColor="#999"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  testID="password-input"
+                />
+              </View>
 
               <TouchableOpacity
-                style={styles.loginButton}
+                style={[styles.loginButton, loading ? styles.loginDisabled : undefined]}
                 onPress={handleLogin}
+                disabled={loading}
                 testID="login-button"
               >
-                <Text style={styles.loginButtonText}>Login</Text>
+                {loading ? <ActivityIndicator color="#fff" /> : <LogIn color="#fff" size={18} />}
+                <Text style={styles.loginButtonText}>{t.t('auth.login') ?? 'Login'}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.forgotPassword}
-                onPress={() => console.log("Forgot password")}
+                onPress={() => Alert.alert('Forgot Password', 'Reset link sent if email exists.')}
               >
-                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                <Text style={styles.forgotPasswordText}>{t.t('auth.forgotPassword') ?? 'Forgot Password?'}</Text>
               </TouchableOpacity>
 
               <View style={styles.divider}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>OR</Text>
+                <Text style={styles.dividerText}>{t.t('common.or') ?? 'OR'}</Text>
                 <View style={styles.dividerLine} />
+              </View>
+
+              <View style={styles.socialRow}>
+                <TouchableOpacity style={styles.socialButton} onPress={handleGoogle} testID="google-login">
+                  <MountainSnow color="#EA4335" size={18} />
+                  <Text style={styles.socialText}>Google</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.socialButton} onPress={handleApple} testID="apple-login">
+                  <Apple color="#000" size={18} />
+                  <Text style={styles.socialText}>Apple</Text>
+                </TouchableOpacity>
               </View>
 
               <TouchableOpacity
@@ -114,7 +214,7 @@ export default function LoginScreen() {
                 testID="signup-link"
               >
                 <Text style={styles.signupButtonText}>
-                  Don't have an account? Sign Up
+                  {t.t('auth.signupCta') ?? "Don't have an account? Sign Up"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -125,97 +225,36 @@ export default function LoginScreen() {
   );
 }
 
+const fontWeight700 = "700" as const;
+
 const styles = StyleSheet.create({
-  gradient: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: "center",
-    paddingHorizontal: 30,
-  },
-  logoContainer: {
-    alignItems: "center",
-    marginBottom: 50,
-  },
-  appName: {
-    fontSize: 36,
-    fontWeight: "bold",
-    color: "white",
-    marginTop: 15,
-  },
-  tagline: {
-    fontSize: 16,
-    color: "rgba(255, 255, 255, 0.9)",
-    marginTop: 5,
-  },
-  formContainer: {
-    backgroundColor: "white",
-    borderRadius: 20,
-    padding: 25,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  input: {
-    backgroundColor: "#F5F5F5",
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 15,
-    fontSize: 16,
-    color: "#333",
-  },
-  loginButton: {
-    backgroundColor: "#FF6B6B",
-    borderRadius: 10,
-    padding: 15,
-    alignItems: "center",
-    marginTop: 10,
-  },
-  loginButtonText: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  forgotPassword: {
-    alignItems: "center",
-    marginTop: 15,
-  },
-  forgotPasswordText: {
-    color: "#FF6B6B",
-    fontSize: 14,
-  },
-  divider: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 20,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#E0E0E0",
-  },
-  dividerText: {
-    marginHorizontal: 10,
-    color: "#999",
-    fontSize: 14,
-  },
-  signupButton: {
-    alignItems: "center",
-  },
-  signupButtonText: {
-    color: "#666",
-    fontSize: 14,
-  },
+  gradient: { flex: 1 },
+  container: { flex: 1 },
+  keyboardView: { flex: 1 },
+  scrollContent: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 30 },
+  langRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 8 },
+  langChips: { paddingHorizontal: 10, gap: 8 },
+  langChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.15)', marginRight: 8 },
+  langChipActive: { backgroundColor: '#fff' },
+  langChipText: { color: '#fff', fontSize: 12 },
+  langChipTextActive: { color: '#FF6B6B', fontWeight: fontWeight700 },
+  logoContainer: { alignItems: "center", marginBottom: 30, marginTop: 10 },
+  appName: { fontSize: 36, fontWeight: "bold", color: "white", marginTop: 15 },
+  tagline: { fontSize: 16, color: "rgba(255, 255, 255, 0.9)", marginTop: 5 },
+  formContainer: { backgroundColor: "white", borderRadius: 20, padding: 25, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3.84, elevation: 5 },
+  inputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F5F5', borderRadius: 10, paddingHorizontal: 12, marginBottom: 15 },
+  input: { flex: 1, padding: 15, fontSize: 16, color: "#333" },
+  loginButton: { flexDirection: 'row', gap: 8, backgroundColor: "#FF6B6B", borderRadius: 10, padding: 15, alignItems: "center", justifyContent: 'center', marginTop: 10 },
+  loginDisabled: { opacity: 0.7 },
+  loginButtonText: { color: "white", fontSize: 18, fontWeight: "600" },
+  forgotPassword: { alignItems: "center", marginTop: 12 },
+  forgotPasswordText: { color: "#FF6B6B", fontSize: 14 },
+  divider: { flexDirection: "row", alignItems: "center", marginVertical: 16 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: "#E0E0E0" },
+  dividerText: { marginHorizontal: 10, color: "#999", fontSize: 14 },
+  socialRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  socialButton: { flex: 1, flexDirection: 'row', backgroundColor: '#F8F8F8', paddingVertical: 12, marginHorizontal: 4, justifyContent: 'center', borderRadius: 10, alignItems: 'center' },
+  socialText: { marginLeft: 6, color: '#333', fontSize: 14, fontWeight: fontWeight700 },
+  signupButton: { alignItems: "center", marginTop: 8 },
+  signupButtonText: { color: "#666", fontSize: 14 },
 });

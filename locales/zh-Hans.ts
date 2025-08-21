@@ -2,8 +2,11 @@ export default {
   common: {
     appName: 'MatchFlow',
     back: '返回',
+    next: '下一步',
+    skip: '跳过',
     cancel: '取消',
     save: '保存',
+    saving: '保存中…',
     or: '或',
   },
   auth: {
@@ -62,6 +65,10 @@ export default {
     title: '聊天',
     inputPlaceholder: '输入消息…',
     send: '发送',
+  },
+  questionnaire: {
+    complete: '完成资料',
+    help: '至少回答 5 个以继续',
   },
   errors: {
     required: '此字段为必填项',

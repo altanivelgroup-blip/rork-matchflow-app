@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -14,45 +14,23 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { Heart, Apple, BadgeCheck, Globe, Mail, Lock, LogIn, MountainSnow } from "lucide-react-native";
+import { Heart, Apple, Globe, Mail, Lock, LogIn, MountainSnow } from "lucide-react-native";
 import { useAuth } from "@/contexts/AuthContext";
 import * as Location from 'expo-location';
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { i18n, supportedLocales, type SupportedLocale, detectDeviceLocale } from "@/lib/i18n";
+import { supportedLocales, type SupportedLocale } from "@/lib/i18n";
 import LanguageSwitchConfirm from '@/components/LanguageSwitchConfirm';
-import en from '@/locales/en';
-import es from '@/locales/es';
-import zhHans from '@/locales/zh-Hans';
-import ja from '@/locales/ja';
-
-const LOCALE_KEY = 'i18n:locale';
+import { useI18n } from '@/contexts/I18nContext';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
-  const [locale, setLocale] = useState<SupportedLocale>(detectDeviceLocale());
   const [pendingLocale, setPendingLocale] = useState<SupportedLocale | null>(null);
   const [confirmVisible, setConfirmVisible] = useState<boolean>(false);
   const { login } = useAuth();
+  const { t, locale, setLocale } = useI18n();
 
-  useEffect(() => {
-    i18n.translations = { en, es, 'zh-Hans': zhHans, ja } as any;
-    const init = async () => {
-      const saved = await AsyncStorage.getItem(LOCALE_KEY);
-      const next = (saved as SupportedLocale) ?? locale;
-      i18n.locale = next;
-      setLocale(next);
-    };
-    init();
-  }, []);
-
-  useEffect(() => {
-    i18n.locale = locale;
-    AsyncStorage.setItem(LOCALE_KEY, locale).catch(() => {});
-  }, [locale]);
-
-  const t = useMemo(() => i18n, [locale]);
+  const i18nProxy = useMemo(() => ({ t: (k: string) => t(k) }), [t, locale]);
 
   const flagFor = (code: SupportedLocale): string => (code === 'en' ? '🇺🇸' : code === 'es' ? '🇪🇸' : code === 'ja' ? '🇯🇵' : '🇨🇳');
 
@@ -61,7 +39,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!emailValid) {
-      Alert.alert(t.t('errors.invalidEmail') ?? 'Invalid email address');
+      Alert.alert(i18nProxy.t('errors.invalidEmail') ?? 'Invalid email address');
       return;
     }
     if (!passwordStrong) {
@@ -147,7 +125,7 @@ export default function LoginScreen() {
 
             <View style={styles.logoContainer}>
               <Heart color="white" size={60} fill="white" />
-              <Text style={styles.appName}>{t.t('common.appName') ?? 'MatchFlow'}</Text>
+              <Text style={styles.appName}>{i18nProxy.t('common.appName') ?? 'MatchFlow'}</Text>
               <Text style={styles.tagline}>Find your perfect match</Text>
             </View>
 
@@ -156,7 +134,7 @@ export default function LoginScreen() {
                 <Mail color="#999" size={18} />
                 <TextInput
                   style={styles.input}
-                  placeholder={t.t('auth.email') ?? 'Email'}
+                  placeholder={i18nProxy.t('auth.email') ?? 'Email'}
                   placeholderTextColor="#999"
                   value={email}
                   onChangeText={setEmail}
@@ -170,7 +148,7 @@ export default function LoginScreen() {
                 <Lock color="#999" size={18} />
                 <TextInput
                   style={styles.input}
-                  placeholder={t.t('auth.password') ?? 'Password'}
+                  placeholder={i18nProxy.t('auth.password') ?? 'Password'}
                   placeholderTextColor="#999"
                   value={password}
                   onChangeText={setPassword}
@@ -186,19 +164,19 @@ export default function LoginScreen() {
                 testID="login-button"
               >
                 {loading ? <ActivityIndicator color="#fff" /> : <LogIn color="#fff" size={18} />}
-                <Text style={styles.loginButtonText}>{t.t('auth.login') ?? 'Login'}</Text>
+                <Text style={styles.loginButtonText}>{i18nProxy.t('auth.login') ?? 'Login'}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.forgotPassword}
                 onPress={() => Alert.alert('Forgot Password', 'Reset link sent if email exists.')}
               >
-                <Text style={styles.forgotPasswordText}>{t.t('auth.forgotPassword') ?? 'Forgot Password?'}</Text>
+                <Text style={styles.forgotPasswordText}>{i18nProxy.t('auth.forgotPassword') ?? 'Forgot Password?'}</Text>
               </TouchableOpacity>
 
               <View style={styles.divider}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>{t.t('common.or') ?? 'OR'}</Text>
+                <Text style={styles.dividerText}>{i18nProxy.t('common.or') ?? 'OR'}</Text>
                 <View style={styles.dividerLine} />
               </View>
 
@@ -219,7 +197,7 @@ export default function LoginScreen() {
                 testID="signup-link"
               >
                 <Text style={styles.signupButtonText}>
-                  {t.t('auth.signupCta') ?? "Don't have an account? Sign Up"}
+                  {i18nProxy.t('auth.signupCta') ?? "Don't have an account? Sign Up"}
                 </Text>
               </TouchableOpacity>
             </View>

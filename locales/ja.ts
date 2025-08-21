@@ -2,8 +2,11 @@ export default {
   common: {
     appName: 'MatchFlow',
     back: '戻る',
+    next: '次へ',
+    skip: 'スキップ',
     cancel: 'キャンセル',
     save: '保存',
+    saving: '保存中…',
     or: 'または',
   },
   auth: {
@@ -62,6 +65,10 @@ export default {
     title: 'チャット',
     inputPlaceholder: 'メッセージを入力…',
     send: '送信',
+  },
+  questionnaire: {
+    complete: 'プロフィールを完了',
+    help: '最低 5 個回答で続行',
   },
   errors: {
     required: '必須項目です',

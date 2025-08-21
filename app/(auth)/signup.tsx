@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -17,14 +17,9 @@ import { router } from "expo-router";
 import { ArrowLeft, Calendar, Globe, IdCard, Lock, Mail, MapPin } from "lucide-react-native";
 import * as Location from 'expo-location';
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { i18n, supportedLocales, type SupportedLocale, detectDeviceLocale } from "@/lib/i18n";
+import { supportedLocales, type SupportedLocale } from "@/lib/i18n";
 import LanguageSwitchConfirm from '@/components/LanguageSwitchConfirm';
-import en from '@/locales/en';
-import es from '@/locales/es';
-import zhHans from '@/locales/zh-Hans';
-import ja from '@/locales/ja';
-
-const LOCALE_KEY = 'i18n:locale';
+import { useI18n } from '@/contexts/I18nContext';
 
 export default function SignupScreen() {
   const [name, setName] = useState<string>("");
@@ -35,27 +30,11 @@ export default function SignupScreen() {
   const [gender, setGender] = useState<string>("");
   const [locationText, setLocationText] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
-  const [locale, setLocale] = useState<SupportedLocale>(detectDeviceLocale());
   const [pendingLocale, setPendingLocale] = useState<SupportedLocale | null>(null);
   const [confirmVisible, setConfirmVisible] = useState<boolean>(false);
+  const { t, locale, setLocale } = useI18n();
 
-  useEffect(() => {
-    i18n.translations = { en, es, 'zh-Hans': zhHans, ja } as any;
-    const init = async () => {
-      const saved = await AsyncStorage.getItem(LOCALE_KEY);
-      const next = (saved as SupportedLocale) ?? locale;
-      i18n.locale = next;
-      setLocale(next);
-    };
-    init();
-  }, []);
-
-  useEffect(() => {
-    i18n.locale = locale;
-    AsyncStorage.setItem(LOCALE_KEY, locale).catch(() => {});
-  }, [locale]);
-
-  const t = useMemo(() => i18n, [locale]);
+  const i18nProxy = useMemo(() => ({ t: (k: string) => t(k) }), [t, locale]);
 
   const flagFor = (code: SupportedLocale): string => (code === 'en' ? '🇺🇸' : code === 'es' ? '🇪🇸' : code === 'ja' ? '🇯🇵' : '🇨🇳');
 
@@ -80,11 +59,11 @@ export default function SignupScreen() {
       return;
     }
     if (!emailValid) {
-      Alert.alert(t.t('errors.invalidEmail') ?? 'Invalid email address');
+      Alert.alert(i18nProxy.t('errors.invalidEmail') ?? 'Invalid email address');
       return;
     }
     if (password !== confirmPassword) {
-      Alert.alert(t.t('errors.passwordsNoMatch') ?? 'Passwords do not match.');
+      Alert.alert(i18nProxy.t('errors.passwordsNoMatch') ?? 'Passwords do not match.');
       return;
     }
     if (!passwordStrong) {
@@ -124,34 +103,34 @@ export default function SignupScreen() {
             </View>
 
             <View style={styles.headerContainer}>
-              <Text style={styles.title}>{t.t('auth.createAccount') ?? 'Create Account'}</Text>
-              <Text style={styles.subtitle}>{t.t('auth.createAccountSubtitle') ?? 'Join MatchFlow to find your perfect match'}</Text>
+              <Text style={styles.title}>{i18nProxy.t('auth.createAccount') ?? 'Create Account'}</Text>
+              <Text style={styles.subtitle}>{i18nProxy.t('auth.createAccountSubtitle') ?? 'Join MatchFlow to find your perfect match'}</Text>
             </View>
 
             <View style={styles.formContainer}>
               <View style={styles.inputRow}>
                 <IdCard color="#999" size={18} />
-                <TextInput style={styles.input} placeholder={t.t('auth.fullName') ?? 'Full Name'} placeholderTextColor="#999" value={name} onChangeText={setName} testID="name-input" />
+                <TextInput style={styles.input} placeholder={i18nProxy.t('auth.fullName') ?? 'Full Name'} placeholderTextColor="#999" value={name} onChangeText={setName} testID="name-input" />
               </View>
 
               <View style={styles.inputRow}>
                 <Mail color="#999" size={18} />
-                <TextInput style={styles.input} placeholder={t.t('auth.email') ?? 'Email'} placeholderTextColor="#999" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" testID="email-input" />
+                <TextInput style={styles.input} placeholder={i18nProxy.t('auth.email') ?? 'Email'} placeholderTextColor="#999" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" testID="email-input" />
               </View>
 
               <View style={styles.inputRow}>
                 <Lock color="#999" size={18} />
-                <TextInput style={styles.input} placeholder={t.t('auth.password') ?? 'Password'} placeholderTextColor="#999" value={password} onChangeText={setPassword} secureTextEntry testID="password-input" />
+                <TextInput style={styles.input} placeholder={i18nProxy.t('auth.password') ?? 'Password'} placeholderTextColor="#999" value={password} onChangeText={setPassword} secureTextEntry testID="password-input" />
               </View>
 
               <View style={styles.inputRow}>
                 <Lock color="#999" size={18} />
-                <TextInput style={styles.input} placeholder={t.t('auth.confirmPassword') ?? 'Confirm Password'} placeholderTextColor="#999" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry testID="confirm-password-input" />
+                <TextInput style={styles.input} placeholder={i18nProxy.t('auth.confirmPassword') ?? 'Confirm Password'} placeholderTextColor="#999" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry testID="confirm-password-input" />
               </View>
 
               <View style={styles.inputRow}>
                 <Calendar color="#999" size={18} />
-                <TextInput style={styles.input} placeholder={t.t('profileSetup.agePlaceholder') ?? 'Age'} placeholderTextColor="#999" value={age} onChangeText={setAge} keyboardType="number-pad" />
+                <TextInput style={styles.input} placeholder={i18nProxy.t('profileSetup.agePlaceholder') ?? 'Age'} placeholderTextColor="#999" value={age} onChangeText={setAge} keyboardType="number-pad" />
               </View>
 
               <View style={styles.inputRow}>

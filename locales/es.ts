@@ -2,8 +2,11 @@ export default {
   common: {
     appName: 'MatchFlow',
     back: 'Atrás',
+    next: 'Siguiente',
+    skip: 'Omitir',
     cancel: 'Cancelar',
     save: 'Guardar',
+    saving: 'Guardando…',
     or: 'O',
   },
   auth: {
@@ -62,6 +65,10 @@ export default {
     title: 'Chat',
     inputPlaceholder: 'Escribe un mensaje...',
     send: 'Enviar',
+  },
+  questionnaire: {
+    complete: 'Completar perfil',
+    help: 'Responde al menos 5 para continuar',
   },
   errors: {
     required: 'Este campo es obligatorio',

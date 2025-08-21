@@ -2,8 +2,11 @@ export default {
   common: {
     appName: 'MatchFlow',
     back: 'Back',
+    next: 'Next',
+    skip: 'Skip',
     cancel: 'Cancel',
     save: 'Save',
+    saving: 'Saving…',
     or: 'OR',
     language: 'Language',
     switchedTo: 'Switched to',
@@ -67,6 +70,10 @@ export default {
     title: 'Chat',
     inputPlaceholder: 'Type a message...',
     send: 'Send',
+  },
+  questionnaire: {
+    complete: 'Complete Profile',
+    help: 'Answer at least 5 to continue',
   },
   errors: {
     required: 'This field is required',

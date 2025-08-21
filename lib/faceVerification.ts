@@ -22,6 +22,13 @@ export interface VerificationResult {
   details?: Record<string, unknown>;
 }
 
+export interface CompareResult {
+  ok: boolean;
+  similarity?: number;
+  reason?: string;
+  details?: Record<string, unknown>;
+}
+
 export type VerificationMode = 'mock' | 'thirdPartyDirect' | 'backend';
 
 interface VerificationConfig {
@@ -329,6 +336,62 @@ export async function runFaceVerification(input: VerificationInput): Promise<Ver
     }
   }
   return { ok: false, reason: 'Unsupported verification mode.' };
+}
+
+export async function compareStaticToLive(staticUri: string, liveFrontUri: string, liveLeftUri?: string | null, liveRightUri?: string | null): Promise<CompareResult> {
+  try {
+    if (Platform.OS === 'web') {
+      const faces = await webDetectFaces(staticUri);
+      if (faces && faces.count !== 1) {
+        return { ok: false, similarity: 0, reason: 'Exactly one face must be visible in the uploaded photo.' };
+      }
+      const [aHashStatic, aHashFront] = await Promise.all([
+        webComputeAHash(staticUri),
+        webComputeAHash(liveFrontUri),
+      ]);
+      const aHashLeft = liveLeftUri ? await webComputeAHash(liveLeftUri) : null;
+      const aHashRight = liveRightUri ? await webComputeAHash(liveRightUri) : null;
+      let scores: number[] = [];
+      if (aHashStatic && aHashFront) {
+        const d = hamming(aHashStatic, aHashFront);
+        scores.push(Math.max(0, 1 - d / 32));
+      }
+      if (aHashStatic && aHashLeft) {
+        const d = hamming(aHashStatic, aHashLeft);
+        scores.push(Math.max(0, 1 - d / 32));
+      }
+      if (aHashStatic && aHashRight) {
+        const d = hamming(aHashStatic, aHashRight);
+        scores.push(Math.max(0, 1 - d / 32));
+      }
+      const sim = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+      const ok = sim >= 0.62;
+      return ok
+        ? { ok: true, similarity: sim, details: { aHashStatic, aHashFront, aHashLeft, aHashRight } }
+        : { ok: false, similarity: sim, reason: 'The uploaded photo does not look like the person from the live capture.' };
+    }
+    const dimsStatic = await new Promise<{ width: number; height: number } | null>((resolve) => {
+      try {
+        Image.getSize(staticUri, (w: number, h: number) => resolve({ width: w, height: h }), () => resolve(null));
+      } catch (e) {
+        resolve(null);
+      }
+    });
+    const dimsFront = await new Promise<{ width: number; height: number } | null>((resolve) => {
+      try {
+        Image.getSize(liveFrontUri, (w: number, h: number) => resolve({ width: w, height: h }), () => resolve(null));
+      } catch (e) {
+        resolve(null);
+      }
+    });
+    const aspect = (dimsStatic && dimsFront) ? (dimsStatic.width / Math.max(1, dimsStatic.height)) / (dimsFront.width / Math.max(1, dimsFront.height)) : 1;
+    const aspectOk = aspect > 0.7 && aspect < 1.3;
+    const ok = aspectOk;
+    return ok ? { ok: true, similarity: 0.65 } : { ok: false, similarity: 0.4, reason: 'Uploaded image failed our on-device similarity check.' };
+  } catch (e) {
+    console.log('[faceVerification] compareStaticToLive error', e);
+    return { ok: false, similarity: 0, reason: 'Comparison failed. Try a clearer photo.' };
+  }
 }
 
 export function faceVectorFromDetails(details?: Record<string, unknown> | null): number[] | null {

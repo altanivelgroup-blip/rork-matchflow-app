@@ -2,11 +2,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Camera as CameraIcon, ArrowLeft, Timer as TimerIcon, RefreshCcw, CheckCircle2, ChevronRight, ShieldCheck, ShieldAlert, Crown } from 'lucide-react-native';
+import { Camera as CameraIcon, ArrowLeft, Timer as TimerIcon, RefreshCcw, CheckCircle2, ChevronRight, ShieldCheck, ShieldAlert, Crown, Image as ImageIcon } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
-import { runFaceVerification, configureFaceVerification, faceVectorFromDetails } from '@/lib/faceVerification';
+import { runFaceVerification, configureFaceVerification, faceVectorFromDetails, compareStaticToLive } from '@/lib/faceVerification';
 import PrivacyNote from '@/components/PrivacyNote';
 import { useMembership } from '@/contexts/MembershipContext';
 
@@ -22,6 +22,7 @@ export default function VerifyPhotoScreen() {
   const [secondsLeft, setSecondsLeft] = useState<number>(120);
   const { tier } = useMembership();
   const [isRequestingPerms, setIsRequestingPerms] = useState<boolean>(false);
+  const [compareResult, setCompareResult] = useState<{ ok: boolean; similarity?: number; reason?: string } | null>(null);
   const [photos, setPhotos] = useState<Record<PoseKey, PoseCaptureMeta | null>>({ front: null, left: null, right: null });
   const [currentPose, setCurrentPose] = useState<PoseKey>('front');
   const [expiredPromptShown, setExpiredPromptShown] = useState<boolean>(false);
@@ -43,6 +44,8 @@ export default function VerifyPhotoScreen() {
       console.log('[VerifyPhoto] configure error', e);
     }
   }, []);
+
+
 
   const resetAll = useCallback(() => {
     setPhotos({ front: null, left: null, right: null });
@@ -301,6 +304,39 @@ export default function VerifyPhotoScreen() {
           <ChevronRight color="#fff" size={18} />
         </TouchableOpacity>
 
+        <View style={styles.compareRow}>
+          <TouchableOpacity
+            style={styles.compareButton}
+            onPress={async () => {
+              try {
+                const lib = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 1 });
+                if (lib.canceled) return;
+                const asset = lib.assets?.[0];
+                if (!asset?.uri) return;
+                if (!photos.front) {
+                  Alert.alert('Need front selfie', 'Capture your front selfie first.');
+                  return;
+                }
+                setCompareResult(null);
+                const res = await compareStaticToLive(asset.uri, photos.front.uri, photos.left?.uri ?? null, photos.right?.uri ?? null);
+                setCompareResult({ ok: res.ok, similarity: res.similarity, reason: res.reason });
+                if (!res.ok) {
+                  Alert.alert('Photo mismatch', res.reason ?? 'Uploaded photo does not match live selfies.');
+                }
+              } catch (e) {
+                Alert.alert('Error', 'Unable to compare photo.');
+              }
+            }}
+            testID="compare-static"
+          >
+            <ImageIcon color="#FF6B6B" size={16} />
+            <Text style={styles.compareText}>Compare uploaded selfie</Text>
+          </TouchableOpacity>
+          {compareResult ? (
+            <Text style={styles.compareHint} testID="compare-result">{compareResult.ok ? `Similarity ${(Math.round((compareResult.similarity ?? 0)*100))}%` : (compareResult.reason ?? 'Not similar')}</Text>
+          ) : null}
+        </View>
+
         {verificationError ? (
           <View style={styles.errorBanner} testID="verification-error">
             <ShieldAlert color="#b91c1c" size={18} />
@@ -376,4 +412,8 @@ const styles = StyleSheet.create({
   errorBanner: { marginTop: 12, backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: 1, padding: 10, borderRadius: 10, flexDirection: 'row', alignItems: 'center' },
   errorText: { color: '#991b1b', marginLeft: 8, fontSize: 12 },
   verifyingRow: { flexDirection: 'row', alignItems: 'center' },
+  compareRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
+  compareButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: '#FFF4F4', borderRadius: 999, borderWidth: 1, borderColor: '#FFE1E1' },
+  compareText: { color: '#FF6B6B', fontSize: 12, fontWeight: '700' },
+  compareHint: { marginLeft: 10, color: '#666', fontSize: 12 },
 });

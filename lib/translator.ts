@@ -1,5 +1,5 @@
 import { SupportedLocale } from '@/lib/i18n';
-import { TranslationResult } from '@/contexts/TranslateContext';
+import type { TranslationResult } from '@/contexts/TranslateContext';
 
 export type TranslatorService = 'openai';
 

@@ -23,6 +23,7 @@ import { scoreProfilesAgainstUser } from "@/lib/aiMatch";
 import { useTranslate } from "@/contexts/TranslateContext";
 import { useMembership } from "@/contexts/MembershipContext";
 import UpgradeModal from "@/components/UpgradeModal";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 const SWIPE_THRESHOLD = screenWidth * 0.25;
@@ -35,6 +36,7 @@ export default function DiscoverScreen() {
   const { enabled: tEnabled, translate, targetLang } = useTranslate();
   const { limits, canSwipe, swipeState, incSwipe } = useMembership();
   const [showUpgrade, setShowUpgrade] = useState<boolean>(false);
+  const [upsellChecked, setUpsellChecked] = useState<boolean>(false);
   const [tMap, setTMap] = useState<Record<string, { bio?: string; interests?: string[]; bioTranslated: boolean; interestsTranslated: boolean }>>({});
 
   const aiQuery = useQuery<{ scores: { id: string; score: number; reason: string }[] }, Error>({
@@ -63,6 +65,21 @@ export default function DiscoverScreen() {
     },
     staleTime: 1000 * 60 * 10,
   });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const shown = await AsyncStorage.getItem('postsignup:upsell_shown_v1');
+        if (!shown && limits.dailySwipes != null) {
+          setShowUpgrade(true);
+        }
+      } catch (e) {
+        console.log('[Discover] upsell load error', e);
+      } finally {
+        setUpsellChecked(true);
+      }
+    })();
+  }, [limits.dailySwipes]);
 
   const orderedProfiles: MockProfile[] = useMemo(() => {
     const scores = aiQuery.data?.scores ?? [];
@@ -380,7 +397,11 @@ export default function DiscoverScreen() {
           <View style={styles.swipePill} testID="swipe-counter">
             <Text style={styles.swipePillText}>{Math.max((limits.dailySwipes ?? 0) - swipeState.count, 0)} left today</Text>
           </View>
-        ) : null}
+        ) : (
+          <View style={[styles.swipePill, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]} testID="swipe-counter-unlimited">
+            <Text style={[styles.swipePillText, { color: '#065F46' }]}>Unlimited swipes</Text>
+          </View>
+        )}
       </View>
 
       {(() => {
@@ -458,7 +479,14 @@ export default function DiscoverScreen() {
         </TouchableOpacity>
       </View>
 
-      <UpgradeModal visible={showUpgrade} onClose={() => setShowUpgrade(false)} testID="upgrade-modal" />
+      <UpgradeModal
+        visible={showUpgrade}
+        onClose={async () => {
+          setShowUpgrade(false);
+          try { await AsyncStorage.setItem('postsignup:upsell_shown_v1', 'true'); } catch (e) { console.log('[Discover] upsell save error', e); }
+        }}
+        testID="upgrade-modal"
+      />
 
       {limits.adsEnabled ? (
         <View style={styles.adBanner} testID="ad-banner">

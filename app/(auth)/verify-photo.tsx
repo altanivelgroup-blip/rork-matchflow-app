@@ -2,12 +2,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Camera as CameraIcon, ArrowLeft, Timer as TimerIcon, RefreshCcw, CheckCircle2, ChevronRight, ShieldCheck, ShieldAlert } from 'lucide-react-native';
+import { Camera as CameraIcon, ArrowLeft, Timer as TimerIcon, RefreshCcw, CheckCircle2, ChevronRight, ShieldCheck, ShieldAlert, Crown } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import { runFaceVerification, configureFaceVerification, faceVectorFromDetails } from '@/lib/faceVerification';
 import PrivacyNote from '@/components/PrivacyNote';
+import { useMembership } from '@/contexts/MembershipContext';
 
 type PoseKey = 'front' | 'left' | 'right';
 
@@ -19,6 +20,7 @@ interface PoseCaptureMeta {
 
 export default function VerifyPhotoScreen() {
   const [secondsLeft, setSecondsLeft] = useState<number>(120);
+  const { tier } = useMembership();
   const [isRequestingPerms, setIsRequestingPerms] = useState<boolean>(false);
   const [photos, setPhotos] = useState<Record<PoseKey, PoseCaptureMeta | null>>({ front: null, left: null, right: null });
   const [currentPose, setCurrentPose] = useState<PoseKey>('front');
@@ -167,8 +169,16 @@ export default function VerifyPhotoScreen() {
       const sizes = [pFront.byteSize ?? 0, pLeft.byteSize ?? 0, pRight.byteSize ?? 0];
       const avg = sizes.reduce((a, b) => a + b, 0) / sizes.length;
       const variance = sizes.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / sizes.length;
-      if (isFinite(variance) && avg > 0 && variance > Math.pow(avg * 0.9, 2)) {
-        return { ok: false, reason: 'Inconsistent image data detected. Please retake in the same lighting.' };
+      if (tier !== 'plus') {
+        if (isFinite(variance) && avg > 0 && variance > Math.pow(avg * 0.9, 2)) {
+          return { ok: false, reason: 'Inconsistent image data detected. Please retake in the same lighting.' };
+        }
+      }
+
+      if (tier === 'plus') {
+        await new Promise((r) => setTimeout(r, 200));
+      } else {
+        await new Promise((r) => setTimeout(r, 1200));
       }
 
       const external = await runFaceVerification({ front: pFront, left: pLeft, right: pRight });
@@ -241,6 +251,13 @@ export default function VerifyPhotoScreen() {
         <TimerIcon color="#FF6B6B" size={20} />
         <Text style={styles.timerText}>{formatTime(secondsLeft)}</Text>
       </View>
+
+      {tier === 'plus' ? (
+        <View style={styles.fastLane} testID="premium-fastlane">
+          <Crown color="#F59E0B" size={16} />
+          <Text style={styles.fastLaneText}>Premium Fast Lane: prioritized verification</Text>
+        </View>
+      ) : null}
 
       <View style={styles.body}>
         <PrivacyNote text="We verify photos locally when possible. On web, basic face checks may use your browser's built‑in APIs. Images are not uploaded unless you proceed." />
@@ -335,6 +352,8 @@ const styles = StyleSheet.create({
   body: { padding: 20 },
   timerCard: { flexDirection: 'row', alignItems: 'center', alignSelf: 'center', marginTop: 16, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: '#FFF4F4', borderWidth: 1, borderColor: '#FFE1E1' },
   timerText: { marginLeft: 8, fontSize: 16, fontWeight: '700', color: '#FF6B6B' },
+  fastLane: { flexDirection: 'row', alignSelf: 'center', alignItems: 'center', gap: 8, marginTop: 8, backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
+  fastLaneText: { color: '#92400E', fontSize: 12, fontWeight: '800' },
   stepTitle: { marginTop: 16, fontSize: 16, fontWeight: '700', color: '#333', alignSelf: 'center' },
   instruction: { marginTop: 6, fontSize: 14, color: '#666', textAlign: 'center' },
   slotsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18 },

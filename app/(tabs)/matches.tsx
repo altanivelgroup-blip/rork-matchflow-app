@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -9,30 +9,77 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { MessageCircle } from "lucide-react-native";
+import { MessageCircle, Languages } from "lucide-react-native";
 import { useMatches } from "@/contexts/MatchContext";
+import { useTranslate } from "@/contexts/TranslateContext";
 
 export default function MatchesScreen() {
   const { matches } = useMatches();
+  const { translate, targetLang } = useTranslate();
+  const [translatedMap, setTranslatedMap] = useState<Record<string, { text: string; detected: string }>>({});
+  const [showTranslated, setShowTranslated] = useState<Record<string, boolean>>({});
+  const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
 
   const handleChatPress = (matchId: string) => {
     router.push(`/chat/${matchId}` as any);
   };
 
-  const renderMatch = ({ item }: { item: typeof matches[0] }) => (
-    <TouchableOpacity
-      style={styles.matchCard}
-      onPress={() => handleChatPress(item.id)}
-      testID={`match-${item.id}`}
-    >
-      <Image source={{ uri: item.image }} style={styles.matchImage} />
-      <View style={styles.matchInfo}>
-        <Text style={styles.matchName}>{item.name}</Text>
-        <Text style={styles.matchMessage}>Start a conversation!</Text>
-      </View>
-      <MessageCircle color="#FF6B6B" size={20} />
-    </TouchableOpacity>
-  );
+  const onTranslatePress = useCallback(async (id: string, bio: string) => {
+    if (!bio) return;
+    if (translatedMap[id]) {
+      setShowTranslated((prev) => ({ ...prev, [id]: !(prev[id] ?? true) }));
+      return;
+    }
+    setLoadingMap((p) => ({ ...p, [id]: true }));
+    try {
+      const res = await translate(bio);
+      setTranslatedMap((p) => ({ ...p, [id]: { text: res.translated, detected: String(res.detectedLang) } }));
+      setShowTranslated((p) => ({ ...p, [id]: true }));
+    } catch (e) {
+      console.log('[Matches] translate error', e);
+    } finally {
+      setLoadingMap((p) => ({ ...p, [id]: false }));
+    }
+  }, [translate, translatedMap]);
+
+  const listData = useMemo(() => matches, [matches]);
+
+  const renderMatch = ({ item }: { item: typeof matches[0] }) => {
+    const t = translatedMap[item.id]?.text;
+    const detected = translatedMap[item.id]?.detected ?? '';
+    const showing = showTranslated[item.id] ?? false;
+    const loading = loadingMap[item.id] ?? false;
+    const bioToShow = showing && t && t !== item.bio ? t : item.bio;
+    return (
+      <TouchableOpacity
+        style={styles.matchCard}
+        onPress={() => handleChatPress(item.id)}
+        testID={`match-${item.id}`}
+      >
+        <Image source={{ uri: item.image }} style={styles.matchImage} />
+        <View style={styles.matchInfo}>
+          <Text style={styles.matchName}>{item.name}</Text>
+          <Text style={styles.matchMessage} numberOfLines={2}>{bioToShow}</Text>
+          <View style={styles.translateRow}>
+            <TouchableOpacity
+              onPress={() => onTranslatePress(item.id, item.bio)}
+              style={styles.translatePill}
+              testID={`translate-${item.id}`}
+            >
+              <Languages color={showing ? '#44D884' : '#2563EB'} size={14} />
+              <Text style={[styles.translateText, { color: showing ? '#10B981' : '#2563EB' }]}>
+                {loading ? 'Translating…' : showing ? 'Show original' : 'AI Translate'}
+              </Text>
+            </TouchableOpacity>
+            {t && t !== item.bio ? (
+              <Text style={styles.translateMeta} numberOfLines={1}>{`AI (${detected}) → ${targetLang}`}</Text>
+            ) : null}
+          </View>
+        </View>
+        <MessageCircle color="#FF6B6B" size={20} />
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -40,7 +87,7 @@ export default function MatchesScreen() {
         <Text style={styles.headerTitle}>Matches</Text>
       </View>
 
-      {matches.length === 0 ? (
+      {listData.length === 0 ? (
         <View style={styles.emptyContainer}>
           <MessageCircle color="#DDD" size={60} />
           <Text style={styles.emptyText}>No matches yet</Text>
@@ -50,7 +97,7 @@ export default function MatchesScreen() {
         </View>
       ) : (
         <FlatList
-          data={matches}
+          data={listData}
           renderItem={renderMatch}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
@@ -114,7 +161,32 @@ const styles = StyleSheet.create({
   },
   matchMessage: {
     fontSize: 14,
-    color: "#999",
+    color: "#666",
+  },
+  translateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  translatePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  translateText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  translateMeta: {
+    fontSize: 10,
+    color: '#6B7280',
   },
   emptyContainer: {
     flex: 1,

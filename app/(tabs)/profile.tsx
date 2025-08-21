@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -11,10 +11,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { Settings, Edit, LogOut, Heart, Star, Eye, Plus, Camera, Image as ImageIcon, Upload, Trash, Crown, Play } from "lucide-react-native";
+import { Settings, Edit, LogOut, Heart, Star, Eye, Camera, Image as ImageIcon, Upload, Trash, Crown, Languages } from "lucide-react-native";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMedia } from "@/contexts/MediaContext";
 import PrivacyNote from "@/components/PrivacyNote";
+import { useTranslate } from "@/contexts/TranslateContext";
 
 const { width } = Dimensions.get('window');
 const GAP = 8;
@@ -43,6 +44,31 @@ function TrianglePlayIcon() {
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const { media, pickFromLibrary, capturePhoto, captureVideo, removeItem, setPrimary } = useMedia();
+  const { translate, targetLang } = useTranslate();
+  const [bioTranslated, setBioTranslated] = useState<string | undefined>(undefined);
+  const [bioDetected, setBioDetected] = useState<string>("");
+  const [showTranslated, setShowTranslated] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+
+  const handleTranslateBio = useCallback(async () => {
+    const bio = user?.bio ?? '';
+    if (!bio) return;
+    if (bioTranslated) {
+      setShowTranslated(v => !v);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await translate(bio);
+      setBioTranslated(res.translated);
+      setBioDetected(String(res.detectedLang));
+      setShowTranslated(true);
+    } catch (e) {
+      console.log('[Profile] translate bio error', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [translate, user?.bio, bioTranslated]);
 
   const handleLogout = () => {
     logout();
@@ -85,8 +111,17 @@ export default function ProfileScreen() {
 
           <Text style={styles.userName}>{user?.name || "User"}, 25</Text>
           <Text style={styles.userBio}>
-            {user?.bio || "Adventure seeker, coffee lover, and dog enthusiast"}
+            {showTranslated && bioTranslated && bioTranslated !== (user?.bio ?? '') ? bioTranslated : (user?.bio || "Adventure seeker, coffee lover, and dog enthusiast")}
           </Text>
+          <View style={styles.translateRow}>
+            <TouchableOpacity style={styles.translatePill} onPress={handleTranslateBio} testID="translate-bio">
+              <Languages color={showTranslated ? '#10B981' : '#2563EB'} size={16} />
+              <Text style={[styles.translateText, { color: showTranslated ? '#10B981' : '#2563EB' }]}>{loading ? 'Translating…' : showTranslated ? 'Show original' : 'AI Translate'}</Text>
+            </TouchableOpacity>
+            {bioTranslated && bioTranslated !== (user?.bio ?? '') ? (
+              <Text style={styles.translateMeta}>{`AI (${bioDetected}) → ${targetLang}`}</Text>
+            ) : null}
+          </View>
         </View>
 
         <View style={styles.statsContainer}>
@@ -246,6 +281,32 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingHorizontal: 40,
     lineHeight: 22,
+  },
+  translateRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  translatePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  translateText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  translateMeta: {
+    fontSize: 10,
+    color: '#6B7280',
   },
   statsContainer: {
     flexDirection: "row",

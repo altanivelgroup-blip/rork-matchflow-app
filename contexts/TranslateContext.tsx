@@ -19,6 +19,7 @@ interface TranslateContextType {
   setEnabled: (v: boolean) => void;
   setTargetLang: (lang: SupportedLocale) => void;
   translate: (text: string) => Promise<TranslationResult>;
+  translateTo: (text: string, target: SupportedLocale) => Promise<TranslationResult>;
   warmup: () => void;
 }
 
@@ -61,6 +62,27 @@ export const [TranslateProvider, useTranslate] = createContextHook<TranslateCont
     }
   }, [targetLang]);
 
+  const translateTo = useCallback(async (text: string, target: SupportedLocale): Promise<TranslationResult> => {
+    const tgt = target;
+    const key = keyFor(text, tgt);
+    const cached = cacheRef.current.get(key);
+    if (cached) return cached;
+    try {
+      const out = await translateText(text, tgt);
+      cacheRef.current.set(key, out);
+      return out;
+    } catch (e) {
+      console.log('[Translate] translateTo error', e);
+      const fallback: TranslationResult = {
+        input: text,
+        translated: text,
+        detectedLang: 'unknown',
+        targetLang: tgt,
+      };
+      return fallback;
+    }
+  }, []);
+
   const warmup = useCallback(() => {
     if (Platform.OS === 'web') {
       console.log('[Translate] warmup on web');
@@ -73,8 +95,9 @@ export const [TranslateProvider, useTranslate] = createContextHook<TranslateCont
     setEnabled,
     setTargetLang,
     translate,
+    translateTo,
     warmup,
-  }), [enabled, targetLang, translate, warmup]);
+  }), [enabled, targetLang, translate, translateTo, warmup]);
 
   return value;
 });

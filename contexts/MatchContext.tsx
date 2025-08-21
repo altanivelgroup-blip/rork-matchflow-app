@@ -1,5 +1,6 @@
 import createContextHook from "@nkzw/create-context-hook";
 import { useState } from "react";
+import { SupportedLocale } from "@/lib/i18n";
 
 interface Profile {
   id: string;
@@ -8,6 +9,7 @@ interface Profile {
   bio: string;
   image: string;
   interests: string[];
+  preferredLang?: SupportedLocale;
 }
 
 export const [MatchProvider, useMatches] = createContextHook(() => {

@@ -4,6 +4,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { Alert } from 'react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { verifySingleImage } from '@/lib/faceVerification';
+import { useTranslate } from '@/contexts/TranslateContext';
+import { SupportedLocale } from '@/lib/i18n';
 
 export type ChatMessageType = 'text' | 'image' | 'video';
 
@@ -21,7 +23,7 @@ export interface ChatMessage {
 
 interface ChatContextType {
   getMessages: (matchId: string) => ChatMessage[];
-  sendText: (matchId: string, text: string) => Promise<void>;
+  sendText: (matchId: string, text: string, recipientLang?: SupportedLocale) => Promise<void>;
   sendImage: (matchId: string) => Promise<void>;
   sendVideo: (matchId: string) => Promise<void>;
   subscribe: (matchId: string, cb: () => void) => () => void;
@@ -47,6 +49,7 @@ class Emitter {
 export const [ChatProvider, useChat] = createContextHook<ChatContextType>(() => {
   const [messagesMap, setMessagesMap] = useState<Record<string, ChatMessage[]>>({});
   const emitterRef = useRef(new Emitter());
+  const { enabled: tEnabled, translateTo, targetLang } = useTranslate();
 
   useEffect(() => {
     (async () => {
@@ -85,15 +88,31 @@ export const [ChatProvider, useChat] = createContextHook<ChatContextType>(() => 
     emitterRef.current.emit(matchId);
   }, []);
 
-  const sendText = useCallback(async (matchId: string, text: string) => {
+  const sendText = useCallback(async (matchId: string, text: string, recipientLang?: SupportedLocale) => {
     if (!text.trim()) return;
+    let outgoing = text.trim();
+    let translatedText: string | undefined = undefined;
+    let detectedLang: string | undefined = undefined;
+    try {
+      const target = recipientLang ?? targetLang;
+      if (tEnabled) {
+        const res = await translateTo(outgoing, target);
+        translatedText = res.translated;
+        detectedLang = res.detectedLang;
+        outgoing = res.translated;
+      }
+    } catch (e) {
+      console.log('[Chat] auto-translate failed, sending original', e);
+    }
     const msg: ChatMessage = {
       id: String(Date.now()),
       matchId,
       type: 'text',
-      text: text.trim(),
+      text: outgoing,
       sender: 'user',
       createdAt: Date.now(),
+      translatedText,
+      detectedLang,
     };
     appendMessage(matchId, msg);
     setTimeout(() => {
@@ -107,7 +126,7 @@ export const [ChatProvider, useChat] = createContextHook<ChatContextType>(() => 
       };
       appendMessage(matchId, echo);
     }, 600);
-  }, [appendMessage]);
+  }, [appendMessage, tEnabled, translateTo, targetLang]);
 
   const requestPerms = async () => {
     const lib = await ImagePicker.requestMediaLibraryPermissionsAsync();

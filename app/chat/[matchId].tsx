@@ -71,7 +71,8 @@ export default function ChatScreen() {
 
   const handleSend = async () => {
     if (!matchId) return;
-    await sendText(String(matchId), inputText);
+    const recipientLang = match?.preferredLang as any;
+    await sendText(String(matchId), inputText, recipientLang);
     setInputText("");
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
   };

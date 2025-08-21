@@ -1,5 +1,9 @@
 import { I18n } from 'i18n-js';
 import { getLocales } from 'expo-localization';
+import en from '@/locales/en';
+import es from '@/locales/es';
+import zhHans from '@/locales/zh-Hans';
+import ja from '@/locales/ja';
 
 export type SupportedLocale = 'en' | 'es' | 'zh-Hans' | 'ja';
 
@@ -17,14 +21,17 @@ i18n.enableFallback = true;
 i18n.defaultLocale = 'en';
 
 i18n.translations = {
-  // Will be populated dynamically by provider import side effects
+  en,
+  es,
+  'zh-Hans': zhHans,
+  ja,
 } as any;
 
 export function detectDeviceLocale(): SupportedLocale {
   try {
     const locales = getLocales();
     const primary = locales?.[0]?.languageTag || locales?.[0]?.languageCode || 'en';
-    const lower = primary.toLowerCase();
+    const lower = (primary || 'en').toLowerCase();
     if (lower.startsWith('es')) return 'es';
     if (lower.startsWith('zh') || lower.includes('hans')) return 'zh-Hans';
     if (lower.startsWith('ja')) return 'ja';

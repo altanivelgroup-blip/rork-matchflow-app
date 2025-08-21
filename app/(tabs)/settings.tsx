@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { Languages, ToggleLeft, ToggleRight, Crown, WifiOff, RefreshCw, CalendarX2, CreditCard } from 'lucide-react-native';
+import { Languages, ToggleLeft, ToggleRight, Crown, WifiOff, RefreshCw, CalendarX2, CreditCard, Globe } from 'lucide-react-native';
 import { useTranslate } from '@/contexts/TranslateContext';
 import { supportedLocales, SupportedLocale } from '@/lib/i18n';
 import { useMembership } from '@/contexts/MembershipContext';
 import { openBillingPortal } from '@/lib/payments';
+import { useI18n } from '@/contexts/I18nContext';
 
 function MembershipSection() {
   const { tier, setTier, limits, subscription, cancel, restore, refresh } = useMembership();
@@ -89,6 +90,7 @@ function PlanRow({ title, subtitle, active, onPress }: { title: string; subtitle
 
 export default function SettingsScreen() {
   const { enabled, setEnabled, targetLang, setTargetLang } = useTranslate();
+  const { locale, setLocale } = useI18n();
   const entries = useMemo(() => Object.entries(supportedLocales) as [SupportedLocale, string][], []);
   const [expanded, setExpanded] = useState<boolean>(true);
   const [offline, setOffline] = useState<boolean>(false);
@@ -119,6 +121,32 @@ export default function SettingsScreen() {
           <Text style={styles.offlineText}>Offline — changes will sync when you're back online.</Text>
         </View>
       ) : null}
+
+      <View style={styles.card}>
+        <View style={styles.row}>
+          <View style={styles.rowLeft}>
+            <Globe color="#111827" size={20} />
+            <Text style={styles.rowTitle}>App Language</Text>
+          </View>
+        </View>
+        <View style={styles.picker}>
+          {entries.map(([code, label]) => {
+            const active = locale === code;
+            return (
+              <TouchableOpacity
+                key={`app-${code}`}
+                style={[styles.langItem, active && styles.langItemActive]}
+                onPress={() => setLocale(code)}
+                testID={`app-lang-${code}`}
+              >
+                <Text style={[styles.langText, active && styles.langTextActive]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
 
       <View style={styles.card}>
         <View style={styles.row}>

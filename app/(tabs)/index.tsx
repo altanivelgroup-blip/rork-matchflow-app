@@ -10,10 +10,11 @@ import {
   TouchableOpacity,
   Platform,
   ActivityIndicator,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { X, Heart, Star } from "lucide-react-native";
+import { X, Heart, Star, MessageCircle } from "lucide-react-native";
 import { mockProfiles, type MockProfile } from "@/mocks/profiles";
 import { router } from "expo-router";
 import { useMatches } from "@/contexts/MatchContext";
@@ -24,6 +25,7 @@ import { useTranslate } from "@/contexts/TranslateContext";
 import { useMembership } from "@/contexts/MembershipContext";
 import UpgradeModal from "@/components/UpgradeModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { backend } from "@/lib/backend";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 const SWIPE_THRESHOLD = screenWidth * 0.25;
@@ -38,6 +40,8 @@ export default function DiscoverScreen() {
   const [showUpgrade, setShowUpgrade] = useState<boolean>(false);
   const [upsellChecked, setUpsellChecked] = useState<boolean>(false);
   const [tMap, setTMap] = useState<Record<string, { bio?: string; interests?: string[]; bioTranslated: boolean; interestsTranslated: boolean }>>({});
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  const [matchModal, setMatchModal] = useState<{ visible: boolean; profile: MockProfile | null }>({ visible: false, profile: null });
 
   const aiQuery = useQuery<{ scores: { id: string; score: number; reason: string }[] }, Error>({
     queryKey: ["aiMatch", user?.email ?? "guest"],
@@ -73,8 +77,13 @@ export default function DiscoverScreen() {
         if (!shown && limits.dailySwipes != null) {
           setShowUpgrade(true);
         }
+        const likedRaw = await AsyncStorage.getItem('mf:likedIds');
+        if (likedRaw) {
+          const arr = JSON.parse(likedRaw) as string[];
+          setLikedIds(new Set(arr));
+        }
       } catch (e) {
-        console.log('[Discover] upsell load error', e);
+        console.log('[Discover] upsell/liked load error', e);
       } finally {
         setUpsellChecked(true);
       }
@@ -181,11 +190,25 @@ export default function DiscoverScreen() {
   const swipeLeft = () => {
     if (!canSwipe) { onBlocked(); return; }
     incSwipe().catch(() => {});
+    const profile = orderedProfiles[currentIndex] as MockProfile | undefined;
+    if (profile) {
+      const uid = user?.email ?? 'guest';
+      backend.recordPass(uid, profile.id).catch((e) => console.log('[Discover] pass error', e));
+    }
     Animated.timing(position, {
       toValue: { x: -screenWidth * 1.5, y: 0 },
       duration: 250,
       useNativeDriver: false,
     }).start(() => nextCard());
+  };
+
+
+  const persistLiked = async (setVal: Set<string>) => {
+    try {
+      await AsyncStorage.setItem('mf:likedIds', JSON.stringify(Array.from(setVal)));
+    } catch (e) {
+      console.log('[Discover] liked persist error', e);
+    }
   };
 
   const swipeRight = () => {
@@ -194,19 +217,28 @@ export default function DiscoverScreen() {
     const deck = orderedProfiles;
     const profile = deck[currentIndex] as MockProfile | undefined;
     if (profile) {
-      if (profile.likedYou) {
-        addMatch({
-          id: profile.id,
-          name: profile.name,
-          age: profile.age,
-          bio: profile.bio,
-          image: profile.image,
-          interests: [...profile.interests],
+      const uid = user?.email ?? 'guest';
+      backend.recordLike(uid, profile.id)
+        .then((res) => {
+          const next = new Set(likedIds);
+          next.add(profile.id);
+          setLikedIds(next);
+          persistLiked(next);
+          if (res.mutual) {
+            addMatch({
+              id: profile.id,
+              name: profile.name,
+              age: profile.age,
+              bio: profile.bio,
+              image: profile.image,
+              interests: [...profile.interests],
+            });
+            setMatchModal({ visible: true, profile });
+          }
+        })
+        .catch((e) => {
+          console.log('[Discover] like error', e);
         });
-        try {
-          router.push(`/chat/${profile.id}` as any);
-        } catch (e) {}
-      }
     }
 
     Animated.timing(position, {
@@ -215,6 +247,7 @@ export default function DiscoverScreen() {
       useNativeDriver: false,
     }).start(() => nextCard());
   };
+
 
   const resetPosition = () => {
     Animated.spring(position, {
@@ -484,6 +517,46 @@ export default function DiscoverScreen() {
           <Heart color="#4FC3F7" size={30} fill="#4FC3F7" />
         </TouchableOpacity>
       </View>
+
+      <Modal
+        transparent
+        visible={matchModal.visible}
+        animationType="fade"
+        onRequestClose={() => setMatchModal({ visible: false, profile: null })}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.matchCard} testID="match-modal">
+            <Text style={styles.matchTitle}>It’s a match!</Text>
+            {matchModal.profile ? (
+              <View style={styles.matchRow}>
+                <Image source={{ uri: matchModal.profile.image }} style={styles.matchAvatar} />
+                <Text style={styles.matchName}>{matchModal.profile.name}</Text>
+              </View>
+            ) : null}
+            <View style={styles.matchButtons}>
+              <TouchableOpacity
+                style={[styles.ctaButton, { backgroundColor: '#111827', borderColor: '#1F2937' }]}
+                onPress={() => setMatchModal({ visible: false, profile: null })}
+                testID="keep-swiping"
+              >
+                <Text style={styles.ctaText}>Keep swiping</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.ctaButton, { backgroundColor: '#FF6B6B', borderColor: '#FCA5A5' }]}
+                onPress={() => {
+                  const id = matchModal.profile?.id;
+                  setMatchModal({ visible: false, profile: null });
+                  if (id) router.push(`/chat/${id}` as any);
+                }}
+                testID="open-chat"
+              >
+                <MessageCircle color="#fff" size={18} />
+                <Text style={[styles.ctaText, { marginLeft: 8 }]}>Chat now</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <UpgradeModal
         visible={showUpgrade}
@@ -831,6 +904,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   upgradeNoticeText: { color: '#B91C1C', fontSize: 12, fontWeight: '900' },
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  matchCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  matchTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#111827',
+    textAlign: 'center',
+  },
+  matchRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14, alignSelf: 'center' },
+  matchAvatar: { width: 56, height: 56, borderRadius: 28 },
+  matchName: { fontSize: 18, fontWeight: '800', color: '#111827' },
+  matchButtons: { flexDirection: 'row', gap: 10, marginTop: 18, justifyContent: 'center' },
+  ctaButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  ctaText: { color: '#fff', fontWeight: '900', fontSize: 14 },
   translatedNote: {
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(167,243,208,0.25)',

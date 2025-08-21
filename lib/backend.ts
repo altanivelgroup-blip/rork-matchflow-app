@@ -56,6 +56,13 @@ export interface UserSettings {
   captureChoice?: CaptureChoice;
 }
 
+export interface LikesState {
+  liked: string[];
+  likedBy: string[];
+}
+
+export interface LikeResult { mutual: boolean }
+
 export interface BackendAPI {
   fetchMembership(userId: UserId): Promise<MembershipSnapshot>;
   setTier(userId: UserId, tier: MembershipTier): Promise<MembershipSnapshot>;
@@ -67,6 +74,9 @@ export interface BackendAPI {
   saveQuestionnaire(userId: UserId, answers: QuestionnaireAnswers): Promise<QuestionnaireAnswers>;
   fetchUserSettings(userId: UserId): Promise<UserSettings | null>;
   saveUserSettings(userId: UserId, settings: Partial<UserSettings>): Promise<UserSettings>;
+  recordLike(userId: UserId, targetUserId: string): Promise<LikeResult>;
+  recordPass(userId: UserId, targetUserId: string): Promise<void>;
+  getLikes(userId: UserId): Promise<LikesState>;
 }
 
 const STORAGE_PREFIX = 'mock-backend:v1';
@@ -97,6 +107,27 @@ function computeExpired(sub: SubscriptionInfo): SubscriptionStatus {
     if (isFinite(renew) && renew < now) return 'expired';
   }
   return sub.status;
+}
+
+async function getLikesKey(userId: UserId): Promise<string> {
+  return `${STORAGE_PREFIX}:likes:${userId}`;
+}
+
+async function readLikes(userId: UserId): Promise<LikesState> {
+  const key = await getLikesKey(userId);
+  const raw = await AsyncStorage.getItem(key);
+  if (!raw) return { liked: [], likedBy: [] };
+  try {
+    const parsed = JSON.parse(raw) as LikesState;
+    return { liked: parsed.liked ?? [], likedBy: parsed.likedBy ?? [] };
+  } catch {
+    return { liked: [], likedBy: [] };
+  }
+}
+
+async function writeLikes(userId: UserId, state: LikesState): Promise<void> {
+  const key = await getLikesKey(userId);
+  await AsyncStorage.setItem(key, JSON.stringify(state));
 }
 
 export class MockBackend implements BackendAPI {
@@ -237,6 +268,42 @@ export class MockBackend implements BackendAPI {
     await AsyncStorage.setItem(key, JSON.stringify(next));
     return next;
   }
+
+  async getLikes(userId: UserId): Promise<LikesState> {
+    const current = await readLikes(userId);
+    return current;
+  }
+
+  async recordLike(userId: UserId, targetUserId: string): Promise<LikeResult> {
+    const myLikes = await readLikes(userId);
+    const already = new Set(myLikes.liked);
+    already.add(targetUserId);
+    const nextMine: LikesState = { liked: Array.from(already), likedBy: myLikes.likedBy };
+    await writeLikes(userId, nextMine);
+
+    const targetLikes = await readLikes(targetUserId);
+    const targetLikedMe = new Set(targetLikes.liked).has(userId);
+
+    // Seed some simulated incoming likes for demo (IDs 1,3,5,8)
+    const simulatedLikedBy = ['1','3','5','8'];
+    const isSimulated = simulatedLikedBy.includes(userId);
+    const mutual = targetLikedMe || isSimulated;
+
+    if (mutual) {
+      // reflect mutual by adding to likedBy lists
+      const nextTarget = { liked: targetLikes.liked, likedBy: Array.from(new Set([...(targetLikes.likedBy ?? []), userId])) } as LikesState;
+      await writeLikes(targetUserId, nextTarget);
+      const nextMineFinal = { ...nextMine, likedBy: Array.from(new Set([...(nextMine.likedBy ?? []), targetUserId])) } as LikesState;
+      await writeLikes(userId, nextMineFinal);
+    }
+    return { mutual };
+  }
+
+  async recordPass(userId: UserId, targetUserId: string): Promise<void> {
+    const myLikes = await readLikes(userId);
+    const next: LikesState = { liked: myLikes.liked.filter(id => id !== targetUserId), likedBy: myLikes.likedBy };
+    await writeLikes(userId, next);
+  }
 }
 
 class RestBackend implements BackendAPI {
@@ -301,6 +368,15 @@ class RestBackend implements BackendAPI {
   }
   async saveUserSettings(userId: UserId, settings: Partial<UserSettings>): Promise<UserSettings> {
     return this.post<UserSettings>(`/api/user/settings`, { userId, settings });
+  }
+  async recordLike(userId: UserId, targetUserId: string): Promise<LikeResult> {
+    return this.post<LikeResult>(`/api/likes/like`, { userId, targetUserId });
+  }
+  async recordPass(userId: UserId, targetUserId: string): Promise<void> {
+    await this.post<void>(`/api/likes/pass`, { userId, targetUserId });
+  }
+  async getLikes(userId: UserId): Promise<LikesState> {
+    return this.get<LikesState>(`/api/likes?userId=${encodeURIComponent(userId)}`);
   }
 }
 

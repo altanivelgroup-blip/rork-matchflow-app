@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useEffect } from "react";
+import React, { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { Settings, Edit, LogOut, Heart, Star, Eye, Camera, Image as ImageIcon, Upload, Trash, Crown, Languages, Check } from "lucide-react-native";
+import { Settings, Edit, LogOut, Heart, Star, Eye, Camera, Image as ImageIcon, Upload, Trash, Crown, Languages, Check, Globe } from "lucide-react-native";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMedia } from "@/contexts/MediaContext";
 import PrivacyNote from "@/components/PrivacyNote";
@@ -19,6 +19,7 @@ import { useTranslate } from "@/contexts/TranslateContext";
 import UpgradeModal from "@/components/UpgradeModal";
 import { useMembership } from "@/contexts/MembershipContext";
 import { supportedLocales, type SupportedLocale } from "@/lib/i18n";
+import { useI18n } from "@/contexts/I18nContext";
 
 const { width } = Dimensions.get('window');
 const GAP = 8;
@@ -50,6 +51,8 @@ export default function ProfileScreen() {
   const { media, pickFromLibrary, capturePhoto, captureVideo, removeItem, setPrimary } = useMedia();
   const { translate, targetLang, enabled, setTargetLang, setEnabled } = useTranslate();
   const { tier } = useMembership();
+  const { locale, setLocale } = useI18n();
+  const mountedRef = useRef<boolean>(false);
   const [bioTranslated, setBioTranslated] = useState<string | undefined>(undefined);
   const [bioDetected, setBioDetected] = useState<string>("");
   const [showTranslated, setShowTranslated] = useState<boolean>(false);
@@ -61,6 +64,11 @@ export default function ProfileScreen() {
   const [qLoading, setQLoading] = useState<boolean>(false);
 
   useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
     const run = async () => {
       const bio = user?.bio ?? '';
       if (!enabled || !bio) return;
@@ -68,13 +76,14 @@ export default function ProfileScreen() {
       try {
         setLoading(true);
         const res = await translate(bio);
+        if (!mountedRef.current) return;
         setBioTranslated(res.translated);
         setBioDetected(String(res.detectedLang));
         setShowTranslated(true);
       } catch (e) {
         console.log('[Profile] auto translate bio error', e);
       } finally {
-        setLoading(false);
+        if (mountedRef.current) setLoading(false);
       }
     };
     run();
@@ -85,16 +94,27 @@ export default function ProfileScreen() {
     const loadQ = async () => {
       try {
         setQLoading(true);
-        const data = await backend.fetchQuestionnaire(uid);
+        const [data, settings] = await Promise.all([
+          backend.fetchQuestionnaire(uid),
+          backend.fetchUserSettings(uid),
+        ]);
         if (!mounted) return;
         setQ(data);
+        if (settings?.preferredLanguage && (Object.keys(supportedLocales) as SupportedLocale[]).includes(settings.preferredLanguage as SupportedLocale)) {
+          setLocale(settings.preferredLanguage as SupportedLocale);
+        }
+        if (settings?.translateTarget && (Object.keys(supportedLocales) as SupportedLocale[]).includes(settings.translateTarget as SupportedLocale)) {
+          setTargetLang(settings.translateTarget as SupportedLocale);
+        }
+        if (typeof settings?.translateEnabled === 'boolean') setEnabled(settings.translateEnabled);
       } catch (e) {
-        console.log('[Profile] load questionnaire error', e);
+        console.log('[Profile] load questionnaire/settings error', e);
       } finally {
         setQLoading(false);
       }
     };
     loadQ();
+    return () => { mounted = false; };
   }, [uid]);
 
   const handleTranslateBio = useCallback(async () => {
@@ -121,6 +141,18 @@ export default function ProfileScreen() {
     logout();
     router.replace("/login" as any);
   };
+
+  useEffect(() => {
+    const persist = async () => {
+      try {
+        await backend.saveUserSettings(uid, { preferredLanguage: locale, translateTarget: targetLang, translateEnabled: enabled });
+        console.log('[Profile] saved language settings to backend');
+      } catch (e) {
+        console.log('[Profile] save settings error', e);
+      }
+    };
+    if (mountedRef.current) persist();
+  }, [locale, targetLang, enabled, uid]);
 
   const stats = [
     { icon: Heart, label: "Likes", value: "127", color: "#FF6B6B" },
@@ -220,7 +252,28 @@ export default function ProfileScreen() {
         </View>
         ) : (
           <View style={styles.languageSection}>
-            <Text style={styles.langTitle}>Translation settings</Text>
+            <View style={styles.appLangHeader}>
+              <Globe color="#111827" size={18} />
+              <Text style={styles.langTitle}>App Language</Text>
+            </View>
+            <View style={styles.segmented}>
+              {(Object.entries(supportedLocales) as [SupportedLocale, string][]).map(([code, label]) => {
+                const active = locale === code;
+                const flag = code === 'en' ? '🇺🇸' : code === 'es' ? '🇪🇸' : code === 'ja' ? '🇯🇵' : '🇨🇳';
+                return (
+                  <TouchableOpacity
+                    key={`seg-${code}`}
+                    onPress={() => setLocale(code)}
+                    style={[styles.segBtn, active && styles.segBtnActive]}
+                    testID={`profile-app-lang-${code}`}
+                  >
+                    <Text style={[styles.segText, active && styles.segTextActive]}>{flag} {label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={[styles.langTitle, { marginTop: 14 }]}>Translation settings</Text>
             <View style={styles.langToggleRow}>
               <Text style={styles.langToggleLabel}>Enable AI Translate</Text>
               <TouchableOpacity
@@ -466,7 +519,22 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     padding: 14,
   },
-  langTitle: { fontSize: 16, fontWeight: '800', color: '#111827', marginBottom: 8 },
+  appLangHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  langTitle: { fontSize: 16, fontWeight: '800', color: '#111827' },
+  segmented: {
+    flexDirection: 'row',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 10,
+    padding: 4,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 10,
+  },
+  segBtn: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 8 },
+  segBtnActive: { backgroundColor: '#111827' },
+  segText: { fontSize: 12, fontWeight: '800', color: '#6B7280' },
+  segTextActive: { color: '#fff' },
   langToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   langToggleLabel: { fontSize: 14, color: '#111827', fontWeight: '700' },
   toggle: { width: 56, height: 32, borderRadius: 16, padding: 3, justifyContent: 'center' },

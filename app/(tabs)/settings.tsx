@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Languages, ToggleLeft, ToggleRight, Crown, WifiOff, RefreshCw, CalendarX2, CreditCard, Globe } from 'lucide-react-native';
@@ -7,6 +7,8 @@ import { supportedLocales, SupportedLocale } from '@/lib/i18n';
 import { useMembership } from '@/contexts/MembershipContext';
 import { openBillingPortal } from '@/lib/payments';
 import { useI18n } from '@/contexts/I18nContext';
+import { backend } from '@/lib/backend';
+import { useAuth } from '@/contexts/AuthContext';
 
 function MembershipSection() {
   const { tier, setTier, limits, subscription, cancel, restore, refresh } = useMembership();
@@ -91,9 +93,17 @@ function PlanRow({ title, subtitle, active, onPress }: { title: string; subtitle
 export default function SettingsScreen() {
   const { enabled, setEnabled, targetLang, setTargetLang } = useTranslate();
   const { locale, setLocale } = useI18n();
+  const { user } = useAuth();
+  const uid = user?.email ?? 'guest';
   const entries = useMemo(() => Object.entries(supportedLocales) as [SupportedLocale, string][], []);
   const [expanded, setExpanded] = useState<boolean>(true);
   const [offline, setOffline] = useState<boolean>(false);
+  const mountedRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -110,6 +120,41 @@ export default function SettingsScreen() {
       };
     }
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const s = await backend.fetchUserSettings(uid);
+        if (cancelled || !mountedRef.current || !s) return;
+        if (s.preferredLanguage && (Object.keys(supportedLocales) as SupportedLocale[]).includes(s.preferredLanguage as SupportedLocale)) {
+          setLocale(s.preferredLanguage as SupportedLocale);
+        }
+        if (s.translateTarget && (Object.keys(supportedLocales) as SupportedLocale[]).includes(s.translateTarget as SupportedLocale)) {
+          setTargetLang(s.translateTarget as SupportedLocale);
+        }
+        if (typeof s.translateEnabled === 'boolean') {
+          setEnabled(s.translateEnabled);
+        }
+      } catch (e) {
+        console.log('[Settings] load user settings error', e);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [uid]);
+
+  useEffect(() => {
+    const persist = async () => {
+      try {
+        await backend.saveUserSettings(uid, { preferredLanguage: locale, translateTarget: targetLang, translateEnabled: enabled });
+        console.log('[Settings] saved settings to backend');
+      } catch (e) {
+        console.log('[Settings] save settings error', e);
+      }
+    };
+    if (mountedRef.current) persist();
+  }, [locale, targetLang, enabled, uid]);
 
   return (
     <View style={styles.container}>
@@ -132,6 +177,7 @@ export default function SettingsScreen() {
         <View style={styles.picker}>
           {entries.map(([code, label]) => {
             const active = locale === code;
+            const flag = code === 'en' ? '🇺🇸' : code === 'es' ? '🇪🇸' : code === 'ja' ? '🇯🇵' : '🇨🇳';
             return (
               <TouchableOpacity
                 key={`app-${code}`}
@@ -140,7 +186,7 @@ export default function SettingsScreen() {
                 testID={`app-lang-${code}`}
               >
                 <Text style={[styles.langText, active && styles.langTextActive]}>
-                  {label}
+                  {flag} {label}
                 </Text>
               </TouchableOpacity>
             );

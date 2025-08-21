@@ -45,6 +45,12 @@ export interface QuestionnaireAnswers {
   cuisine?: string[];
 }
 
+export interface UserSettings {
+  preferredLanguage?: string;
+  translateTarget?: string;
+  translateEnabled?: boolean;
+}
+
 export interface BackendAPI {
   fetchMembership(userId: UserId): Promise<MembershipSnapshot>;
   setTier(userId: UserId, tier: MembershipTier): Promise<MembershipSnapshot>;
@@ -54,6 +60,8 @@ export interface BackendAPI {
   restoreSubscription(userId: UserId): Promise<MembershipSnapshot>;
   fetchQuestionnaire(userId: UserId): Promise<QuestionnaireAnswers | null>;
   saveQuestionnaire(userId: UserId, answers: QuestionnaireAnswers): Promise<QuestionnaireAnswers>;
+  fetchUserSettings(userId: UserId): Promise<UserSettings | null>;
+  saveUserSettings(userId: UserId, settings: Partial<UserSettings>): Promise<UserSettings>;
 }
 
 const STORAGE_PREFIX = 'mock-backend:v1';
@@ -135,6 +143,26 @@ export class MockBackend implements BackendAPI {
     const key = `${STORAGE_PREFIX}:q:${userId}`;
     await AsyncStorage.setItem(key, JSON.stringify(answers));
     return answers;
+  }
+
+  async fetchUserSettings(userId: UserId): Promise<UserSettings | null> {
+    const key = `${STORAGE_PREFIX}:settings:${userId}`;
+    const raw = await AsyncStorage.getItem(key);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as UserSettings;
+    } catch {
+      return null;
+    }
+  }
+
+  async saveUserSettings(userId: UserId, settings: Partial<UserSettings>): Promise<UserSettings> {
+    const key = `${STORAGE_PREFIX}:settings:${userId}`;
+    const currentRaw = await AsyncStorage.getItem(key);
+    const current = currentRaw ? (JSON.parse(currentRaw) as UserSettings) : {};
+    const next: UserSettings = { ...current, ...settings };
+    await AsyncStorage.setItem(key, JSON.stringify(next));
+    return next;
   }
 
   async setTier(userId: UserId, tier: MembershipTier): Promise<MembershipSnapshot> {
@@ -251,6 +279,16 @@ class RestBackend implements BackendAPI {
   }
   async saveQuestionnaire(userId: UserId, answers: QuestionnaireAnswers): Promise<QuestionnaireAnswers> {
     return this.post<QuestionnaireAnswers>(`/api/profile/questionnaire`, { userId, answers });
+  }
+  async fetchUserSettings(userId: UserId): Promise<UserSettings | null> {
+    try {
+      return await this.get<UserSettings | null>(`/api/user/settings?userId=${encodeURIComponent(userId)}`);
+    } catch (e) {
+      return null;
+    }
+  }
+  async saveUserSettings(userId: UserId, settings: Partial<UserSettings>): Promise<UserSettings> {
+    return this.post<UserSettings>(`/api/user/settings`, { userId, settings });
   }
 }
 

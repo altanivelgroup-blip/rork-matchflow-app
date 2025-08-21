@@ -102,6 +102,7 @@ export default function SettingsScreen() {
   const mountedRef = useRef<boolean>(false);
   const [verificationMode, setVerificationMode] = useState<VerificationModePref>('auto');
   const [captureChoice, setCaptureChoice] = useState<CaptureChoice>('static');
+  const [matchAnimationsEnabled, setMatchAnimationsEnabled] = useState<boolean>(true);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -139,6 +140,9 @@ export default function SettingsScreen() {
         if (typeof s.translateEnabled === 'boolean') {
           setEnabled(s.translateEnabled);
         }
+        if (typeof s.matchAnimationsEnabled === 'boolean') {
+          setMatchAnimationsEnabled(s.matchAnimationsEnabled);
+        }
         if (s.verificationMode === 'auto' || s.verificationMode === 'manual' || s.verificationMode === 'both') {
           setVerificationMode(s.verificationMode);
         }
@@ -156,14 +160,14 @@ export default function SettingsScreen() {
   useEffect(() => {
     const persist = async () => {
       try {
-        await backend.saveUserSettings(uid, { preferredLanguage: locale, translateTarget: targetLang, translateEnabled: enabled, verificationMode, captureChoice });
+        await backend.saveUserSettings(uid, { preferredLanguage: locale, translateTarget: targetLang, translateEnabled: enabled, verificationMode, captureChoice, matchAnimationsEnabled });
         console.log('[Settings] saved settings to backend');
       } catch (e) {
         console.log('[Settings] save settings error', e);
       }
     };
     if (mountedRef.current) persist();
-  }, [locale, targetLang, enabled, uid, verificationMode, captureChoice]);
+  }, [locale, targetLang, enabled, uid, verificationMode, captureChoice, matchAnimationsEnabled]);
 
   return (
     <View style={styles.container}>
@@ -298,6 +302,23 @@ export default function SettingsScreen() {
             })}
           </View>
         ) : null}
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.row}>
+          <View style={styles.rowLeft}>
+            <ImageIcon color="#111827" size={20} />
+            <Text style={styles.rowTitle}>Match Celebrations</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => setMatchAnimationsEnabled(!matchAnimationsEnabled)}
+            style={styles.toggle}
+            testID="toggle-match-animations"
+          >
+            {matchAnimationsEnabled ? <ToggleRight color="#10B981" size={28} /> : <ToggleLeft color="#9CA3AF" size={28} />}
+          </TouchableOpacity>
+        </View>
+        <Text style={{ marginTop: 8, color: '#6B7280', fontSize: 12 }}>Show confetti/hearts when you have a mutual match. Useful to disable for motion sensitivity.</Text>
       </View>
 
       <View style={styles.card}>

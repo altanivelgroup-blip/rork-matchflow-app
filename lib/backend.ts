@@ -54,6 +54,7 @@ export interface UserSettings {
   translateEnabled?: boolean;
   verificationMode?: VerificationModePref;
   captureChoice?: CaptureChoice;
+  matchAnimationsEnabled?: boolean;
 }
 
 export interface LikesState {
@@ -202,6 +203,7 @@ export class MockBackend implements BackendAPI {
       translateEnabled: current.translateEnabled,
       verificationMode: current.verificationMode ?? 'auto',
       captureChoice: current.captureChoice ?? 'static',
+      matchAnimationsEnabled: typeof current.matchAnimationsEnabled === 'boolean' ? current.matchAnimationsEnabled : true,
       ...settings,
     };
     await AsyncStorage.setItem(key, JSON.stringify(next));

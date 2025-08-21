@@ -8,15 +8,17 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { Image as ExpoImage } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
-import { Image as RNImage, Send, ImageIcon, Video as VideoIcon, Languages, Shield, ChevronDown } from "lucide-react-native";
+import { Image as RNImage, Send, ImageIcon, Video as VideoIcon, Languages, Shield, ChevronDown, RefreshCw } from "lucide-react-native";
 import { useMatches } from "@/contexts/MatchContext";
 import { useChat } from "@/contexts/ChatContext";
 import { useTranslate } from "@/contexts/TranslateContext";
 import { SupportedLocale, supportedLocales } from "@/lib/i18n";
+import { showToast } from "@/lib/toast";
 
 interface MessageUI {
   id: string;
@@ -35,6 +37,7 @@ export default function ChatScreen() {
   const [inputText, setInputText] = useState<string>("");
   const flatListRef = useRef<FlatList>(null);
   const [translatedMap, setTranslatedMap] = useState<Record<string, { translated: string; detected: string }>>({});
+  const [failedMap, setFailedMap] = useState<Record<string, boolean>>({});
   const [showTranslated, setShowTranslated] = useState<boolean>(true);
   const [showLangPicker, setShowLangPicker] = useState<boolean>(false);
 
@@ -67,9 +70,11 @@ export default function ChatScreen() {
         if (translatedMap[m.id]) continue;
         try {
           const res = await translate(m.text);
-          setTranslatedMap((prev) => ({ ...prev, [m.id]: { translated: res.translated, detected: res.detectedLang } }));
+          setTranslatedMap((prev) => ({ ...prev, [m.id]: { translated: res.translated, detected: String(res.detectedLang) } }));
+          setFailedMap((prev) => ({ ...prev, [m.id]: false }));
         } catch (e) {
           console.log('[Chat] translate error', e);
+          setFailedMap((prev) => ({ ...prev, [m.id]: true }));
         }
       }
     };
@@ -132,8 +137,21 @@ export default function ChatScreen() {
     }
     const translated = translatedMap[item.id]?.translated;
     const detected = translatedMap[item.id]?.detected ?? '';
-    const shouldShowTranslation = tEnabled && translated && translated !== item.text;
+    const shouldShowTranslation = tEnabled && !!translated && translated !== item.text;
     const displayText = shouldShowTranslation && showTranslated ? translated : (item.text ?? '');
+
+    const onRetry = async () => {
+      try {
+        if (!item.text) return;
+        const res = await translate(item.text);
+        setTranslatedMap((prev) => ({ ...prev, [item.id]: { translated: res.translated, detected: String(res.detectedLang) } }));
+        setFailedMap((prev) => ({ ...prev, [item.id]: false }));
+      } catch (e) {
+        console.log('[Chat] retry translate error', e);
+        showToast('Translation failed—retry?');
+      }
+    };
+
     return (
       <View
         style={[
@@ -156,6 +174,11 @@ export default function ChatScreen() {
               {showTranslated ? `Translated by AI (${String(detected)}) → ${targetLang}` : 'Showing original'}
             </Text>
           </View>
+        ) : tEnabled && item.type === 'text' && !translated && failedMap[item.id] ? (
+          <TouchableOpacity style={[styles.translationMeta, { flexDirection: 'row', alignItems: 'center', gap: 6 }]} onPress={onRetry} testID={`retry-${item.id}`}>
+            <RefreshCw color="#EEE" size={12} />
+            <Text style={styles.translationMetaText}>Retry translation</Text>
+          </TouchableOpacity>
         ) : null}
       </View>
     );

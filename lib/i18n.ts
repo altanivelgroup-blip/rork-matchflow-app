@@ -14,14 +14,11 @@ export const supportedLocales: Record<SupportedLocale, string> = {
   ja: '日本語',
 };
 
-export const i18n = new I18n({
-  locale: 'en',
-  enableFallback: true,
-});
-
-// enableFallback configured in constructor
+export const i18n = new I18n();
 
 i18n.defaultLocale = 'en';
+i18n.enableFallback = true;
+i18n.locale = 'en';
 
 i18n.translations = {
   en,

@@ -52,10 +52,10 @@ export default function ProfileScreen() {
   const { translate, targetLang, enabled, setTargetLang, setEnabled } = useTranslate();
   const { tier } = useMembership();
   const { locale, setLocale, t } = useI18n();
-  const headerTitleStr = useMemo(() => t('profile.header'), [t]);
-  const tabLanguageStr = useMemo(() => t('common.language') ?? 'Language', [t]);
-  const appLanguageTitle = useMemo(() => t('settings.appLanguage') ?? 'App Language', [t]);
-  const switchedToText = useMemo(() => t('common.switchedTo') ?? 'Switched to', [t]);
+  const headerTitleStr = useMemo(() => t('profile.header'), [t, locale]);
+  const tabLanguageStr = useMemo(() => t('common.language') ?? 'Language', [t, locale]);
+  const appLanguageTitle = useMemo(() => t('settings.appLanguage') ?? 'App Language', [t, locale]);
+  const switchedToText = useMemo(() => t('common.switchedTo') ?? 'Switched to', [t, locale]);
   const mountedRef = useRef<boolean>(false);
   const [bioTranslated, setBioTranslated] = useState<string | undefined>(undefined);
   const [bioDetected, setBioDetected] = useState<string>("");
@@ -204,11 +204,11 @@ export default function ProfileScreen() {
             <View style={styles.planBanner}>
               <View style={styles.planLeft}>
                 <Crown color={tier === 'plus' ? '#F59E0B' : '#6B7280'} size={18} />
-                <Text style={styles.planText}>{tier === 'plus' ? 'Premium/Pro active' : 'Free/Basic plan'}</Text>
+                <Text style={styles.planText}>{tier === 'plus' ? t('profile.planPremiumActive') : t('profile.planFree')}</Text>
               </View>
               {tier === 'free' ? (
                 <TouchableOpacity style={styles.upgradeBtn} onPress={() => setUpgradeVisible(true)} testID="open-upgrade">
-                  <Text style={styles.upgradeBtnText}>Upgrade</Text>
+                  <Text style={styles.upgradeBtnText}>{t('profile.upgrade')}</Text>
                 </TouchableOpacity>
               ) : null}
             </View>
@@ -251,7 +251,7 @@ export default function ProfileScreen() {
               <View style={styles.translateRow}>
                 <TouchableOpacity style={styles.translatePill} onPress={handleTranslateBio} testID="translate-bio">
                   <Languages color={showTranslated ? '#10B981' : '#2563EB'} size={16} />
-                  <Text style={[styles.translateText, { color: showTranslated ? '#10B981' : '#2563EB' }]}>{loading ? 'Translating…' : showTranslated ? 'Show original' : (enabled ? 'Show translation' : 'AI Translate')}</Text>
+                  <Text style={[styles.translateText, { color: showTranslated ? '#10B981' : '#2563EB' }]}>{loading ? t('profile.translating') : showTranslated ? t('profile.showOriginal') : (enabled ? t('profile.showTranslation') : t('profile.aiTranslate'))}</Text>
                 </TouchableOpacity>
                 {bioTranslated && bioTranslated !== (user?.bio ?? '') ? (
                   <Text style={styles.translateMeta}>{`AI (${bioDetected}) → ${targetLang}`}</Text>
@@ -281,9 +281,9 @@ export default function ProfileScreen() {
                   })}
                 </View>
 
-                <Text style={[styles.langTitle, { marginTop: 14 }]}>Translation settings</Text>
+                <Text style={[styles.langTitle, { marginTop: 14 }]}>{t('settings.translationSettings')}</Text>
                 <View style={styles.langToggleRow}>
-                  <Text style={styles.langToggleLabel}>Enable AI Translate</Text>
+                  <Text style={styles.langToggleLabel}>{t('settings.enableAITranslate')}</Text>
                   <TouchableOpacity
                     accessibilityRole="switch"
                     accessibilityState={{ checked: enabled }}
@@ -295,7 +295,7 @@ export default function ProfileScreen() {
                   </TouchableOpacity>
                 </View>
 
-                <Text style={styles.langSubtitle}>Target language</Text>
+                <Text style={styles.langSubtitle}>{t('settings.targetLanguage')}</Text>
                 <View style={styles.langList}>
                   {Object.entries(supportedLocales).map(([code, label]) => {
                     const c = code as SupportedLocale;
@@ -315,7 +315,7 @@ export default function ProfileScreen() {
                 </View>
 
                 <View style={styles.langHintBox}>
-                  <Text style={styles.langHintText}>Your bio and chats can be translated to your target language.</Text>
+                  <Text style={styles.langHintText}>{t('settings.translationHint')}</Text>
                 </View>
               </View>
             )}
@@ -323,8 +323,8 @@ export default function ProfileScreen() {
             {/* Questionnaire Summary */}
             <View style={styles.qCard}>
               <View style={styles.qHeaderRow}>
-                <Text style={styles.qCardTitle}>Profile Questionnaire</Text>
-                <Text style={styles.qProgressText}>{qLoading ? 'Loading…' : `${completionPct}%`}</Text>
+                <Text style={styles.qCardTitle}>{t('profile.questionnaireTitle')}</Text>
+                <Text style={styles.qProgressText}>{qLoading ? t('profile.loading') : `${completionPct}%`}</Text>
               </View>
               <View style={styles.qProgressBarOuter}>
                 <View style={[styles.qProgressBarInner, { width: `${completionPct}%` }]} />
@@ -339,14 +339,14 @@ export default function ProfileScreen() {
               </View>
               <View style={styles.qMetaRow}>
                 {q?.preferredAgeRange ? (
-                  <Text style={styles.qMetaText}>{`Age: ${q.preferredAgeRange.min}-${q.preferredAgeRange.max}`}</Text>
+                  <Text style={styles.qMetaText}>{`${t('profile.ageLabel')}: ${q.preferredAgeRange.min}-${q.preferredAgeRange.max}`}</Text>
                 ) : null}
                 {q?.lookingFor ? (
-                  <Text style={styles.qMetaText}>{`Looking: ${q.lookingFor}`}</Text>
+                  <Text style={styles.qMetaText}>{`${t('profile.lookingLabel')}: ${q.lookingFor}`}</Text>
                 ) : null}
               </View>
               <TouchableOpacity style={styles.qEditBtn} onPress={() => router.push('/questionnaire' as any)} testID="edit-questionnaire-inline">
-                <Text style={styles.qEditText}>{q ? 'Edit answers' : 'Start now'}</Text>
+                <Text style={styles.qEditText}>{q ? t('profile.editAnswers') : t('profile.startNow')}</Text>
               </TouchableOpacity>
             </View>
 
@@ -366,19 +366,19 @@ export default function ProfileScreen() {
             <View style={styles.mediaActions}>
               <TouchableOpacity style={[styles.actionButton, styles.actionPrimary]} onPress={() => capturePhoto()} testID="capture-photo">
                 <Camera color="#fff" size={18} />
-                <Text style={styles.actionText}>Capture Photo</Text>
+                <Text style={styles.actionText}>{t('profile.capturePhoto')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.actionButton} onPress={() => pickFromLibrary('image')} testID="pick-image">
                 <ImageIcon color="#333" size={18} />
-                <Text style={styles.actionTextDark}>Add Photo</Text>
+                <Text style={styles.actionTextDark}>{t('profile.addPhoto')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.actionButton} onPress={() => captureVideo()} testID="capture-video">
                 <Camera color="#333" size={18} />
-                <Text style={styles.actionTextDark}>Capture Video</Text>
+                <Text style={styles.actionTextDark}>{t('profile.captureVideo')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.actionButton} onPress={() => pickFromLibrary('video')} testID="pick-video">
                 <ImageIcon color="#333" size={18} />
-                <Text style={styles.actionTextDark}>Add Video</Text>
+                <Text style={styles.actionTextDark}>{t('profile.addVideo')}</Text>
               </TouchableOpacity>
             </View>
 
@@ -386,7 +386,7 @@ export default function ProfileScreen() {
               <PrivacyNote testID="privacy-note-profile" />
             </View>
 
-            <Text style={styles.galleryHeader}>Gallery</Text>
+            <Text style={styles.galleryHeader}>{t('profile.gallery')}</Text>
           </View>
         )}
         renderItem={({ item }) => {
@@ -427,7 +427,7 @@ export default function ProfileScreen() {
             testID="logout-button"
           >
             <LogOut color="#FF4458" size={20} />
-            <Text style={styles.logoutText}>Logout</Text>
+            <Text style={styles.logoutText}>{t('profile.logout')}</Text>
           </TouchableOpacity>
         )}
         showsVerticalScrollIndicator={false}

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -12,10 +12,11 @@ import {
 import { useLocalSearchParams, router } from "expo-router";
 import { Image as ExpoImage } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
-import { Image as RNImage, Send, ImageIcon, Video as VideoIcon, Languages, Shield } from "lucide-react-native";
+import { Image as RNImage, Send, ImageIcon, Video as VideoIcon, Languages, Shield, ChevronDown } from "lucide-react-native";
 import { useMatches } from "@/contexts/MatchContext";
 import { useChat } from "@/contexts/ChatContext";
 import { useTranslate } from "@/contexts/TranslateContext";
+import { SupportedLocale, supportedLocales } from "@/lib/i18n";
 
 interface MessageUI {
   id: string;
@@ -28,13 +29,14 @@ interface MessageUI {
 
 export default function ChatScreen() {
   const { matchId } = useLocalSearchParams();
-  const { matches } = useMatches();
+  const { matches, getPreferredLang, setPreferredLang } = useMatches();
   const { getMessages, sendText, sendImage, sendVideo, subscribe } = useChat();
   const { enabled: tEnabled, setEnabled: setTEnabled, translate, targetLang } = useTranslate();
   const [inputText, setInputText] = useState<string>("");
   const flatListRef = useRef<FlatList>(null);
   const [translatedMap, setTranslatedMap] = useState<Record<string, { translated: string; detected: string }>>({});
   const [showTranslated, setShowTranslated] = useState<boolean>(true);
+  const [showLangPicker, setShowLangPicker] = useState<boolean>(false);
 
   const match = matches.find(m => String(m.id) === String(matchId));
 
@@ -42,6 +44,11 @@ export default function ChatScreen() {
     if (!matchId) return [] as MessageUI[];
     return getMessages(String(matchId)) as unknown as MessageUI[];
   }, [getMessages, matchId]);
+
+  const recipientLang: SupportedLocale | undefined = useMemo(() => {
+    if (!matchId) return undefined;
+    return getPreferredLang(String(matchId));
+  }, [getPreferredLang, matchId]);
 
   useEffect(() => {
     if (!matchId) return;
@@ -67,15 +74,20 @@ export default function ChatScreen() {
       }
     };
     run();
-  }, [messages, tEnabled, translate]);
+  }, [messages, tEnabled, translate, translatedMap]);
 
   const handleSend = async () => {
     if (!matchId) return;
-    const recipientLang = match?.preferredLang as any;
     await sendText(String(matchId), inputText, recipientLang);
     setInputText("");
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
   };
+
+  const handleSetLang = useCallback(async (lang: SupportedLocale) => {
+    if (!matchId) return;
+    await setPreferredLang(String(matchId), lang);
+    setShowLangPicker(false);
+  }, [matchId, setPreferredLang]);
 
   const handleAttachImage = async () => {
     if (!matchId) return;
@@ -194,6 +206,33 @@ export default function ChatScreen() {
         >
           <VideoIcon color="#FF6B6B" size={20} />
         </TouchableOpacity>
+        <View style={styles.langContainer}>
+          <TouchableOpacity
+            style={styles.langButton}
+            onPress={() => setShowLangPicker((v) => !v)}
+            testID="open-lang-picker"
+          >
+            <Languages color="#2563EB" size={18} />
+            <Text style={styles.langText}>{recipientLang ? supportedLocales[recipientLang] : 'Lang'}</Text>
+            <ChevronDown color="#2563EB" size={14} />
+          </TouchableOpacity>
+          {showLangPicker ? (
+            <View style={styles.langPicker} testID="lang-picker">
+              {Object.entries(supportedLocales).map(([code, label]) => (
+                <TouchableOpacity
+                  key={code}
+                  style={[styles.langItem, recipientLang === code ? styles.langItemActive : undefined]}
+                  onPress={() => handleSetLang(code as SupportedLocale)}
+                  testID={`lang-${code}`}
+                >
+                  <Text style={[styles.langItemText, recipientLang === code ? styles.langItemTextActive : undefined]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+        </View>
         <TouchableOpacity
           style={styles.attachButton}
           onPress={() => setTEnabled(!tEnabled)}
@@ -370,5 +409,56 @@ const styles = StyleSheet.create({
   privacyText: {
     fontSize: 10,
     color: '#1F2937',
+  },
+  langContainer: {
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  langButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  langText: {
+    fontSize: 12,
+    color: '#2563EB',
+    fontWeight: '600',
+  },
+  langPicker: {
+    position: 'absolute',
+    bottom: 46,
+    right: 0,
+    width: 180,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#EEE',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  langItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  langItemActive: {
+    backgroundColor: '#F3F4F6',
+  },
+  langItemText: {
+    fontSize: 14,
+    color: '#111827',
+  },
+  langItemTextActive: {
+    color: '#2563EB',
+    fontWeight: '700',
   },
 });

@@ -18,7 +18,7 @@ const defaultValue: ToastContextType = {
 export const [ToastProvider, useToast] = createContextHook<ToastContextType>(() => {
   const [state, setState] = useState<ToastState>({ message: '', visible: false });
   const opacity = useRef(new Animated.Value(0)).current;
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
@@ -50,9 +50,6 @@ export const [ToastProvider, useToast] = createContextHook<ToastContextType>(() 
 
   return (
     <View style={{ flex: 1 }}>
-      {/* @ts-expect-error children provided by wrapper */}
-      {undefined}
-      {/* Overlay */}
       {state.visible ? (
         <Animated.View pointerEvents="none" style={[styles.toast, { opacity }] } testID="toast">
           <Text style={styles.toastText}>{state.message}</Text>

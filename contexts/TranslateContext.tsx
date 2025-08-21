@@ -33,6 +33,16 @@ const defaultTarget: SupportedLocale = (() => {
 interface TranslateUsageState { dateISO: string; count: number }
 const STORAGE_USAGE = 'translate:usage:v1';
 
+const defaultValue: TranslateContextType = {
+  enabled: false,
+  targetLang: defaultTarget,
+  setEnabled: () => {},
+  setTargetLang: () => {},
+  translate: async (text: string) => ({ input: text, translated: text, detectedLang: 'unknown', targetLang: defaultTarget }),
+  translateTo: async (text: string, target: SupportedLocale) => ({ input: text, translated: text, detectedLang: 'unknown', targetLang: target }),
+  warmup: () => {},
+};
+
 export const [TranslateProvider, useTranslate] = createContextHook<TranslateContextType>(() => {
   const [enabled, setEnabled] = useState<boolean>(true);
   const [targetLang, setTargetLang] = useState<SupportedLocale>(defaultTarget);
@@ -40,6 +50,12 @@ export const [TranslateProvider, useTranslate] = createContextHook<TranslateCont
   const { tier } = useMembership();
   const cacheRef = useRef<Map<string, TranslationResult>>(new Map());
   const [usage, setUsage] = useState<TranslateUsageState>({ dateISO: new Date().toISOString().slice(0, 10), count: 0 });
+  const mountedRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     cacheRef.current.clear();
@@ -53,6 +69,7 @@ export const [TranslateProvider, useTranslate] = createContextHook<TranslateCont
           AsyncStorage.getItem('translate:target'),
           AsyncStorage.getItem(STORAGE_USAGE),
         ]);
+        if (!mountedRef.current) return;
         if (e != null) {
           const parsed = e === 'true';
           setEnabled(parsed);
@@ -88,7 +105,7 @@ export const [TranslateProvider, useTranslate] = createContextHook<TranslateCont
         console.log('[Translate] save settings error', err);
       }
     };
-    persist();
+    if (mountedRef.current) persist();
   }, [enabled, targetLang, usage]);
 
   const resetIfNewDay = useCallback(() => {
@@ -199,4 +216,4 @@ export const [TranslateProvider, useTranslate] = createContextHook<TranslateCont
   }), [enabled, targetLang, translate, translateTo, warmup]);
 
   return value;
-});
+}, defaultValue);

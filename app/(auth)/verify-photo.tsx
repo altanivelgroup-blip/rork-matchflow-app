@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import { runFaceVerification, configureFaceVerification, faceVectorFromDetails, compareStaticToLive, verifySingleImage } from '@/lib/faceVerification';
+import { getEffectiveCapture, getGatingMode, canStartLiveCapture, verificationFlags, livenessParams, type CaptureChoice as CaptureChoiceConst, type VerificationModePref as VerificationModePrefConst } from '@/lib/verificationGuards';
 import PrivacyNote from '@/components/PrivacyNote';
 import { useMembership } from '@/contexts/MembershipContext';
 import { backend, VerificationModePref, CaptureChoice } from '@/lib/backend';
@@ -33,8 +34,8 @@ export default function VerifyPhotoScreen() {
   const verificationStartedAtRef = useRef<number>(Date.now());
   const { user } = useAuth();
   const uid = user?.email ?? 'guest';
-  const [verificationMode, setVerificationMode] = useState<VerificationModePref>('auto');
-  const [captureChoice, setCaptureChoice] = useState<CaptureChoice>('static');
+  const [verificationMode, setVerificationMode] = useState<VerificationModePrefConst>('auto');
+  const [captureChoice, setCaptureChoice] = useState<CaptureChoiceConst>('static');
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -120,14 +121,7 @@ export default function VerifyPhotoScreen() {
     return 'Turn your head to your RIGHT and keep shoulders visible';
   }, [currentPose]);
 
-  const effectiveCapture: CaptureChoice = useMemo(() => {
-    if (verificationMode === 'auto') {
-      if (Platform.OS === 'web') return 'static';
-      return 'live';
-    }
-    if (Platform.OS === 'web' && captureChoice === 'live') return 'static';
-    return captureChoice;
-  }, [verificationMode, captureChoice]);
+  const effectiveCapture: CaptureChoiceConst = useMemo(() => getEffectiveCapture(verificationMode, captureChoice), [verificationMode, captureChoice]);
 
   const formatTime = useCallback((total: number) => {
     const m = Math.floor(total / 60);
@@ -140,8 +134,9 @@ export default function VerifyPhotoScreen() {
   const captureCurrent = useCallback(async () => {
     const ok = await requestPermissions();
     if (!ok) return;
-    if (effectiveCapture === 'live' && Platform.OS === 'web') {
-      Alert.alert('Live preview not available', 'Using Static capture on web.');
+    if (effectiveCapture === 'live') {
+      const gate = canStartLiveCapture();
+      if (!gate.ok) Alert.alert('Switching to Static', gate.reason ?? '');
     }
     try {
       const result = await ImagePicker.launchCameraAsync({
@@ -308,6 +303,7 @@ export default function VerifyPhotoScreen() {
           <Shuffle color="#6B7280" size={16} />
           <Text style={styles.modeText}>Mode: {verificationMode === 'auto' ? 'Auto-switch' : verificationMode === 'manual' ? 'Manual' : 'Auto + Override'}</Text>
           <Text style={styles.modeText}>Capture: {effectiveCapture === 'live' ? 'Live Preview' : 'Static'}</Text>
+          <Text style={styles.modeText}>Liveness: {livenessParams.frames} frames / {Math.round(livenessParams.windowMs/100)/10}s, ε={livenessParams.stabilityEpsilon}</Text>
         </View>
         {verificationMode !== 'auto' ? (
           <View style={styles.modePicker}>

@@ -47,13 +47,13 @@ export default function RootLayout() {
           <MatchProvider>
             <MembershipProvider>
               <MediaProvider>
-                <ChatProvider>
-                  <TranslateProvider>
+                <TranslateProvider>
+                  <ChatProvider>
                     <ErrorBoundary>
                       <RootLayoutNav />
                     </ErrorBoundary>
-                  </TranslateProvider>
-                </ChatProvider>
+                  </ChatProvider>
+                </TranslateProvider>
               </MediaProvider>
             </MembershipProvider>
           </MatchProvider>

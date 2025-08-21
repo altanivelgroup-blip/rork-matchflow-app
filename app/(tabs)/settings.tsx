@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { Languages, ToggleLeft, ToggleRight, Crown, WifiOff, RefreshCw, CalendarX2, CreditCard, Globe } from 'lucide-react-native';
+import { Languages, ToggleLeft, ToggleRight, Crown, WifiOff, RefreshCw, CalendarX2, CreditCard, Globe, Webcam, Image as ImageIcon, Shuffle } from 'lucide-react-native';
 import { useTranslate } from '@/contexts/TranslateContext';
 import { supportedLocales, SupportedLocale } from '@/lib/i18n';
 import { useMembership } from '@/contexts/MembershipContext';
 import { openBillingPortal } from '@/lib/payments';
 import { useI18n } from '@/contexts/I18nContext';
-import { backend } from '@/lib/backend';
+import { backend, VerificationModePref, CaptureChoice } from '@/lib/backend';
 import { useAuth } from '@/contexts/AuthContext';
 
 function MembershipSection() {
@@ -99,6 +99,8 @@ export default function SettingsScreen() {
   const [expanded, setExpanded] = useState<boolean>(true);
   const [offline, setOffline] = useState<boolean>(false);
   const mountedRef = useRef<boolean>(false);
+  const [verificationMode, setVerificationMode] = useState<VerificationModePref>('auto');
+  const [captureChoice, setCaptureChoice] = useState<CaptureChoice>('static');
 
   useEffect(() => {
     mountedRef.current = true;
@@ -136,6 +138,12 @@ export default function SettingsScreen() {
         if (typeof s.translateEnabled === 'boolean') {
           setEnabled(s.translateEnabled);
         }
+        if (s.verificationMode === 'auto' || s.verificationMode === 'manual' || s.verificationMode === 'both') {
+          setVerificationMode(s.verificationMode);
+        }
+        if (s.captureChoice === 'live' || s.captureChoice === 'static') {
+          setCaptureChoice(s.captureChoice);
+        }
       } catch (e) {
         console.log('[Settings] load user settings error', e);
       }
@@ -147,14 +155,14 @@ export default function SettingsScreen() {
   useEffect(() => {
     const persist = async () => {
       try {
-        await backend.saveUserSettings(uid, { preferredLanguage: locale, translateTarget: targetLang, translateEnabled: enabled });
+        await backend.saveUserSettings(uid, { preferredLanguage: locale, translateTarget: targetLang, translateEnabled: enabled, verificationMode, captureChoice });
         console.log('[Settings] saved settings to backend');
       } catch (e) {
         console.log('[Settings] save settings error', e);
       }
     };
     if (mountedRef.current) persist();
-  }, [locale, targetLang, enabled, uid]);
+  }, [locale, targetLang, enabled, uid, verificationMode, captureChoice]);
 
   return (
     <View style={styles.container}>
@@ -192,6 +200,68 @@ export default function SettingsScreen() {
             );
           })}
         </View>
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.row}>
+          <View style={styles.rowLeft}>
+            <Shuffle color="#111827" size={20} />
+            <Text style={styles.rowTitle}>Verification Mode</Text>
+          </View>
+        </View>
+        <View style={styles.picker}>
+          {([
+            ['auto', 'Auto-switch only'],
+            ['manual', 'Manual only'],
+            ['both', 'Auto + Manual override'],
+          ] as Array<[VerificationModePref, string]>).map(([key, label]) => {
+            const active = verificationMode === key;
+            return (
+              <TouchableOpacity
+                key={`verif-${key}`}
+                style={[styles.langItem, active && styles.langItemActive]}
+                onPress={() => setVerificationMode(key)}
+                testID={`verification-mode-${key}`}
+              >
+                <Text style={[styles.langText, active && styles.langTextActive]}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.row}>
+          <View style={styles.rowLeft}>
+            <Webcam color="#111827" size={20} />
+            <Text style={styles.rowTitle}>Capture Preference</Text>
+          </View>
+        </View>
+        <View style={styles.picker}>
+          {([
+            ['live', 'Live Preview'],
+            ['static', 'Static (snap then analyze)'],
+          ] as Array<[CaptureChoice, string]>).map(([key, label]) => {
+            const active = captureChoice === key;
+            const disabled = Platform.OS === 'web' && key === 'live';
+            return (
+              <TouchableOpacity
+                key={`capture-${key}`}
+                style={[styles.langItem, active && styles.langItemActive, disabled && styles.itemDisabled]}
+                onPress={() => !disabled && setCaptureChoice(key)}
+                disabled={disabled}
+                testID={`capture-choice-${key}`}
+              >
+                <Text style={[styles.langText, active && styles.langTextActive, disabled && styles.textDisabled]}>
+                  {key === 'live' ? '📹' : '🖼️'} {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        {Platform.OS === 'web' ? (
+          <Text style={styles.note}>Live preview is limited on web. We’ll auto-fallback to Static when unavailable.</Text>
+        ) : null}
       </View>
 
       <View style={styles.card}>
@@ -292,4 +362,7 @@ const styles = StyleSheet.create({
   warnBtn: { backgroundColor: '#FEF2F2', borderColor: '#FECACA' },
   offlineBar: { margin: 16, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA', padding: 10, borderRadius: 10 },
   offlineText: { color: '#991B1B', fontSize: 12, fontWeight: '800', flex: 1 },
+  itemDisabled: { opacity: 0.5 },
+  textDisabled: { color: '#9CA3AF' },
+  note: { marginTop: 8, color: '#6B7280', fontSize: 12 },
 });

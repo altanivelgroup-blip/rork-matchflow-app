@@ -45,10 +45,15 @@ export interface QuestionnaireAnswers {
   cuisine?: string[];
 }
 
+export type VerificationModePref = 'auto' | 'manual' | 'both';
+export type CaptureChoice = 'live' | 'static';
+
 export interface UserSettings {
   preferredLanguage?: string;
   translateTarget?: string;
   translateEnabled?: boolean;
+  verificationMode?: VerificationModePref;
+  captureChoice?: CaptureChoice;
 }
 
 export interface BackendAPI {
@@ -160,7 +165,14 @@ export class MockBackend implements BackendAPI {
     const key = `${STORAGE_PREFIX}:settings:${userId}`;
     const currentRaw = await AsyncStorage.getItem(key);
     const current = currentRaw ? (JSON.parse(currentRaw) as UserSettings) : {};
-    const next: UserSettings = { ...current, ...settings };
+    const next: UserSettings = { 
+      preferredLanguage: current.preferredLanguage,
+      translateTarget: current.translateTarget,
+      translateEnabled: current.translateEnabled,
+      verificationMode: current.verificationMode ?? 'auto',
+      captureChoice: current.captureChoice ?? 'static',
+      ...settings,
+    };
     await AsyncStorage.setItem(key, JSON.stringify(next));
     return next;
   }

@@ -2,13 +2,15 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Camera as CameraIcon, ArrowLeft, Timer as TimerIcon, RefreshCcw, CheckCircle2, ChevronRight, ShieldCheck, ShieldAlert, Crown, Image as ImageIcon } from 'lucide-react-native';
+import { Camera as CameraIcon, ArrowLeft, Timer as TimerIcon, RefreshCcw, CheckCircle2, ChevronRight, ShieldCheck, ShieldAlert, Crown, Image as ImageIcon, Webcam, ImageOff, Shuffle } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
-import { runFaceVerification, configureFaceVerification, faceVectorFromDetails, compareStaticToLive } from '@/lib/faceVerification';
+import { runFaceVerification, configureFaceVerification, faceVectorFromDetails, compareStaticToLive, verifySingleImage } from '@/lib/faceVerification';
 import PrivacyNote from '@/components/PrivacyNote';
 import { useMembership } from '@/contexts/MembershipContext';
+import { backend, VerificationModePref, CaptureChoice } from '@/lib/backend';
+import { useAuth } from '@/contexts/AuthContext';
 
 type PoseKey = 'front' | 'left' | 'right';
 
@@ -29,6 +31,10 @@ export default function VerifyPhotoScreen() {
   const [verifying, setVerifying] = useState<boolean>(false);
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const verificationStartedAtRef = useRef<number>(Date.now());
+  const { user } = useAuth();
+  const uid = user?.email ?? 'guest';
+  const [verificationMode, setVerificationMode] = useState<VerificationModePref>('auto');
+  const [captureChoice, setCaptureChoice] = useState<CaptureChoice>('static');
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -44,6 +50,22 @@ export default function VerifyPhotoScreen() {
       console.log('[VerifyPhoto] configure error', e);
     }
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const s = await backend.fetchUserSettings(uid);
+        if (cancelled || !s) return;
+        if (s.verificationMode === 'auto' || s.verificationMode === 'manual' || s.verificationMode === 'both') setVerificationMode(s.verificationMode);
+        if (s.captureChoice === 'live' || s.captureChoice === 'static') setCaptureChoice(s.captureChoice);
+      } catch (e) {
+        console.log('[VerifyPhoto] load settings error', e);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [uid]);
 
 
 
@@ -98,6 +120,15 @@ export default function VerifyPhotoScreen() {
     return 'Turn your head to your RIGHT and keep shoulders visible';
   }, [currentPose]);
 
+  const effectiveCapture: CaptureChoice = useMemo(() => {
+    if (verificationMode === 'auto') {
+      if (Platform.OS === 'web') return 'static';
+      return 'live';
+    }
+    if (Platform.OS === 'web' && captureChoice === 'live') return 'static';
+    return captureChoice;
+  }, [verificationMode, captureChoice]);
+
   const formatTime = useCallback((total: number) => {
     const m = Math.floor(total / 60);
     const s = total % 60;
@@ -109,6 +140,9 @@ export default function VerifyPhotoScreen() {
   const captureCurrent = useCallback(async () => {
     const ok = await requestPermissions();
     if (!ok) return;
+    if (effectiveCapture === 'live' && Platform.OS === 'web') {
+      Alert.alert('Live preview not available', 'Using Static capture on web.');
+    }
     try {
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -119,6 +153,12 @@ export default function VerifyPhotoScreen() {
       if (result.canceled) return;
       const asset = result.assets?.[0];
       if (!asset?.uri) return;
+
+      const single = await verifySingleImage(asset.uri);
+      if (!single.ok) {
+        Alert.alert('Face required', single.reason ?? 'Exactly one face must be visible.');
+        return;
+      }
 
       let size: number | null = null;
       try {
@@ -142,7 +182,7 @@ export default function VerifyPhotoScreen() {
       console.log('[VerifyPhoto] capture error', e);
       Alert.alert('Camera error', 'Unable to open camera. Try again.');
     }
-  }, [currentPose, requestPermissions]);
+  }, [currentPose, requestPermissions, effectiveCapture]);
 
   const allReady = useMemo(() => !!(photos.front && photos.left && photos.right), [photos]);
 
@@ -264,6 +304,31 @@ export default function VerifyPhotoScreen() {
 
       <View style={styles.body}>
         <PrivacyNote text="We verify photos locally when possible. On web, basic face checks may use your browser's built‑in APIs. Images are not uploaded unless you proceed." />
+        <View style={styles.modeBar}>
+          <Shuffle color="#6B7280" size={16} />
+          <Text style={styles.modeText}>Mode: {verificationMode === 'auto' ? 'Auto-switch' : verificationMode === 'manual' ? 'Manual' : 'Auto + Override'}</Text>
+          <Text style={styles.modeText}>Capture: {effectiveCapture === 'live' ? 'Live Preview' : 'Static'}</Text>
+        </View>
+        {verificationMode !== 'auto' ? (
+          <View style={styles.modePicker}>
+            {(['live','static'] as CaptureChoice[]).map((c) => {
+              const active = effectiveCapture === c;
+              const disabled = Platform.OS === 'web' && c === 'live';
+              return (
+                <TouchableOpacity
+                  key={c}
+                  style={[styles.modeItem, active && styles.modeItemActive, disabled && styles.itemDisabled]}
+                  onPress={() => !disabled && setCaptureChoice(c)}
+                  disabled={disabled}
+                  testID={`mode-${c}`}
+                >
+                  {c === 'live' ? <Webcam color={active ? '#065F46' : '#374151'} size={16} /> : <ImageOff color={active ? '#065F46' : '#374151'} size={16} />}
+                  <Text style={[styles.modeTextOption, active && styles.modeTextActive, disabled && styles.textDisabled]}>{c === 'live' ? 'Live Preview' : 'Static'}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : null}
         <Text style={styles.stepTitle}>Step {currentPose === 'front' ? '1' : currentPose === 'left' ? '2' : '3'} of 3</Text>
         <Text style={styles.instruction} testID="pose-instruction">{instruction}</Text>
 
@@ -416,4 +481,13 @@ const styles = StyleSheet.create({
   compareButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: '#FFF4F4', borderRadius: 999, borderWidth: 1, borderColor: '#FFE1E1' },
   compareText: { color: '#FF6B6B', fontSize: 12, fontWeight: '700' },
   compareHint: { marginLeft: 10, color: '#666', fontSize: 12 },
+  modeBar: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+  modeText: { color: '#6B7280', fontSize: 12 },
+  modePicker: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  modeItem: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 16, backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB' },
+  modeItemActive: { backgroundColor: '#D1FAE5', borderColor: '#6EE7B7' },
+  itemDisabled: { opacity: 0.5 },
+  textDisabled: { color: '#9CA3AF' },
+  modeTextOption: { fontSize: 13, color: '#374151', fontWeight: '600' },
+  modeTextActive: { color: '#065F46' },
 });

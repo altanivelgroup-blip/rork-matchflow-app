@@ -1,6 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { detectDeviceLocale, SupportedLocale } from '@/lib/i18n';
 import { translateText } from '@/lib/translator';
 
@@ -37,6 +38,41 @@ export const [TranslateProvider, useTranslate] = createContextHook<TranslateCont
   useEffect(() => {
     cacheRef.current.clear();
   }, [targetLang]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [e, t] = await Promise.all([
+          AsyncStorage.getItem('translate:enabled'),
+          AsyncStorage.getItem('translate:target'),
+        ]);
+        if (e != null) {
+          const parsed = e === 'true';
+          setEnabled(parsed);
+        }
+        if (t) {
+          setTargetLang(t as SupportedLocale);
+        }
+        console.log('[Translate] loaded settings', { e, t });
+      } catch (err) {
+        console.log('[Translate] load settings error', err);
+      }
+    };
+    load();
+  }, []);
+
+  useEffect(() => {
+    const persist = async () => {
+      try {
+        await AsyncStorage.setItem('translate:enabled', String(enabled));
+        await AsyncStorage.setItem('translate:target', String(targetLang));
+        console.log('[Translate] saved settings', { enabled, targetLang });
+      } catch (err) {
+        console.log('[Translate] save settings error', err);
+      }
+    };
+    persist();
+  }, [enabled, targetLang]);
 
   const keyFor = (text: string, tgt: SupportedLocale) => `${tgt}::${text}`;
 

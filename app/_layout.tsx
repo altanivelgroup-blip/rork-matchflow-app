@@ -8,6 +8,7 @@ import { MatchProvider } from "@/contexts/MatchContext";
 import { MediaProvider } from "@/contexts/MediaContext";
 import { ChatProvider } from "@/contexts/ChatContext";
 import { TranslateProvider } from "@/contexts/TranslateContext";
+import { MembershipProvider } from "@/contexts/MembershipContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 SplashScreen.preventAutoHideAsync();
@@ -44,15 +45,17 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <AuthProvider>
           <MatchProvider>
-            <MediaProvider>
-              <ChatProvider>
-                <TranslateProvider>
-                  <ErrorBoundary>
-                    <RootLayoutNav />
-                  </ErrorBoundary>
-                </TranslateProvider>
-              </ChatProvider>
-            </MediaProvider>
+            <MembershipProvider>
+              <MediaProvider>
+                <ChatProvider>
+                  <TranslateProvider>
+                    <ErrorBoundary>
+                      <RootLayoutNav />
+                    </ErrorBoundary>
+                  </TranslateProvider>
+                </ChatProvider>
+              </MediaProvider>
+            </MembershipProvider>
           </MatchProvider>
         </AuthProvider>
       </GestureHandlerRootView>

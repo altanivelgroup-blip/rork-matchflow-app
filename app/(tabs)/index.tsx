@@ -21,6 +21,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { scoreProfilesAgainstUser } from "@/lib/aiMatch";
 import { useTranslate } from "@/contexts/TranslateContext";
+import { useMembership } from "@/contexts/MembershipContext";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 const SWIPE_THRESHOLD = screenWidth * 0.25;
@@ -31,6 +32,7 @@ export default function DiscoverScreen() {
   const { addMatch } = useMatches();
   const { user } = useAuth();
   const { enabled: tEnabled, translate, targetLang } = useTranslate();
+  const { limits, canSwipe, swipeState, incSwipe } = useMembership();
   const [tMap, setTMap] = useState<Record<string, { bio?: string; interests?: string[]; bioTranslated: boolean; interestsTranslated: boolean }>>({});
 
   const aiQuery = useQuery<{ scores: { id: string; score: number; reason: string }[] }, Error>({
@@ -154,6 +156,8 @@ export default function DiscoverScreen() {
   ).current;
 
   const swipeLeft = () => {
+    if (!canSwipe) return;
+    incSwipe().catch(() => {});
     Animated.timing(position, {
       toValue: { x: -screenWidth * 1.5, y: 0 },
       duration: 250,
@@ -162,6 +166,8 @@ export default function DiscoverScreen() {
   };
 
   const swipeRight = () => {
+    if (!canSwipe) return;
+    incSwipe().catch(() => {});
     const deck = orderedProfiles;
     const profile = deck[currentIndex] as MockProfile | undefined;
     if (profile) {
@@ -364,13 +370,18 @@ export default function DiscoverScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>MatchFlow</Text>
+        {limits.dailySwipes != null ? (
+          <View style={styles.swipePill} testID="swipe-counter">
+            <Text style={styles.swipePillText}>{Math.max((limits.dailySwipes ?? 0) - swipeState.count, 0)} left today</Text>
+          </View>
+        ) : null}
       </View>
 
       {(() => {
         const scores = aiQuery.data?.scores ?? [];
         const byId: Record<string, number> = {};
         for (const s of scores) byId[s.id] = s.score;
-        const recs = orderedProfiles.filter((p) => (byId[p.id] ?? 0) >= 70).slice(0, 10);
+        const recs = limits.aiRecommendations ? orderedProfiles.filter((p) => (byId[p.id] ?? 0) >= 70).slice(0, 10) : [];
         if (!recs.length) return null;
         return (
           <View style={styles.recsBar} testID="ai-recommended-bar">
@@ -440,6 +451,12 @@ export default function DiscoverScreen() {
           <Heart color="#4FC3F7" size={30} fill="#4FC3F7" />
         </TouchableOpacity>
       </View>
+
+      {limits.adsEnabled ? (
+        <View style={styles.adBanner} testID="ad-banner">
+          <Text style={styles.adText}>Ad — Upgrade to Plus to remove ads</Text>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -736,6 +753,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: "center",
   },
+  swipePill: {
+    marginTop: 6,
+    backgroundColor: '#FFF1F2',
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  swipePillText: {
+    color: '#BE123C',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  adBanner: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  adText: { color: '#6B7280', fontSize: 12, fontWeight: '700' },
   translatedNote: {
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(167,243,208,0.25)',

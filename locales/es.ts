@@ -8,6 +8,8 @@ export default {
     save: 'Guardar',
     saving: 'Guardando…',
     or: 'O',
+    language: 'Idioma',
+    switchedTo: 'Cambiado a',
   },
   auth: {
     login: 'Iniciar sesión',

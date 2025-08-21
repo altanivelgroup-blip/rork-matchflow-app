@@ -7,11 +7,13 @@ import { backend, type QuestionnaireAnswers } from '@/lib/backend';
 import { router } from 'expo-router';
 import { Check, ChevronLeft, ChevronRight, Crown, Info, Languages, Sparkles, X } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { i18n, type SupportedLocale } from '@/lib/i18n';
+import { i18n, type SupportedLocale, supportedLocales } from '@/lib/i18n';
 import en from '@/locales/en';
 import es from '@/locales/es';
 import zhHans from '@/locales/zh-Hans';
 import ja from '@/locales/ja';
+import { useI18n } from '@/contexts/I18nContext';
+import LanguageSwitchConfirm from '@/components/LanguageSwitchConfirm';
 
 const Q_STORAGE = 'questionnaire:progress:v1';
 
@@ -48,8 +50,10 @@ function chip(text: string, selected: boolean) {
 export default function QuestionnaireScreen() {
   const { user } = useAuth();
   const { tier } = useMembership();
+  const { locale, setLocale } = useI18n();
   const uid = user?.email ?? 'guest';
-  const [locale] = useState<SupportedLocale>('en');
+  const [pendingLocale, setPendingLocale] = useState<SupportedLocale | null>(null);
+  const [confirmVisible, setConfirmVisible] = useState<boolean>(false);
   const [current, setCurrent] = useState<number>(0);
   const [saving, setSaving] = useState<boolean>(false);
   const isPlus = tier === 'plus';
@@ -162,6 +166,16 @@ export default function QuestionnaireScreen() {
 
   const progress = Math.round(((current + 1) / totalSteps) * 100);
 
+  const t = useMemo(() => i18n, [locale]);
+
+  const allowedLocales = useMemo(() => {
+    const all = Object.keys(supportedLocales) as SupportedLocale[];
+    if (tier === 'free') return all.filter((c) => c === 'en' || c === 'es');
+    return all;
+  }, [tier]);
+
+  const flagFor = (code: SupportedLocale): string => (code === 'en' ? '🇺🇸' : code === 'es' ? '🇪🇸' : code === 'ja' ? '🇯🇵' : '🇨🇳');
+
   const renderStep = (step: StepDef) => {
     if (step.type === 'multi' && step.options) {
       const sel = (answers[step.key] as string[]) ?? [];
@@ -271,6 +285,16 @@ export default function QuestionnaireScreen() {
         <View style={{ width: 22 }} />
       </View>
 
+      <View style={styles.langBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.langChips}>
+          {allowedLocales.map((code) => (
+            <TouchableOpacity key={code} style={[styles.langChip, locale === code ? styles.langChipActive : undefined]} onPress={() => { setPendingLocale(code); setConfirmVisible(true); }} testID={`q-lang-${code}`}>
+              <Text style={[styles.langChipText, locale === code ? styles.langChipTextActive : undefined]}>{`${flagFor(code)} ${supportedLocales[code]}`}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
       {isPlus ? (
         <View style={styles.premiumPill}>
           <Crown color="#F59E0B" size={14} />
@@ -291,26 +315,43 @@ export default function QuestionnaireScreen() {
 
       <View style={styles.footer}>
         <TouchableOpacity style={[styles.primaryBtn, !canProceed ? styles.primaryBtnDisabled : undefined]} onPress={saveAll} disabled={!canProceed} testID="save-questionnaire">
-          <Text style={styles.primaryText}>{saving ? 'Saving…' : 'Complete Profile'}</Text>
+          <Text style={styles.primaryText}>{saving ? t.t('common.saving') ?? 'Saving…' : t.t('questionnaire.complete') ?? 'Complete Profile'}</Text>
         </TouchableOpacity>
         <View style={styles.navRow}>
           <TouchableOpacity onPress={goBack} disabled={current === 0} style={[styles.navBtn, current === 0 ? styles.navDisabled : undefined]} testID="prev-step">
-            <Text style={styles.navText}>Back</Text>
+            <Text style={styles.navText}>{t.t('common.back') ?? 'Back'}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={goNext} disabled={current === totalSteps - 1} style={[styles.navBtn, current === totalSteps - 1 ? styles.navDisabled : undefined]} testID="next-step">
-            <Text style={styles.navText}>Next</Text>
+            <Text style={styles.navText}>{t.t('common.next') ?? 'Next'}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => router.replace('/(tabs)')} style={styles.navBtn} testID="skip-q">
-            <Text style={styles.navText}>Skip</Text>
+            <Text style={styles.navText}>{t.t('common.skip') ?? 'Skip'}</Text>
           </TouchableOpacity>
         </View>
-        <Text style={styles.helpText}>Answer at least 5 to continue</Text>
+        <Text style={styles.helpText}>{t.t('questionnaire.help') ?? 'Answer at least 5 to continue'}</Text>
       </View>
+      <LanguageSwitchConfirm
+        visible={confirmVisible}
+        selectedLabel={pendingLocale ? supportedLocales[pendingLocale] : ''}
+        onCancel={() => { setConfirmVisible(false); setPendingLocale(null); }}
+        onConfirm={() => {
+          const next = pendingLocale ?? locale;
+          setLocale(next);
+          setConfirmVisible(false);
+          setPendingLocale(null);
+        }}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  langBar: { paddingHorizontal: 12, paddingTop: 8 },
+  langChips: { gap: 8 },
+  langChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB' },
+  langChipActive: { backgroundColor: '#111827', borderColor: '#111827' },
+  langChipText: { color: '#111827', fontWeight: '700', fontSize: 12 },
+  langChipTextActive: { color: '#fff' },
   container: { flex: 1, backgroundColor: '#FFFFFF' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   progressOuter: { flex: 1, height: 6, backgroundColor: '#E2E8F0', borderRadius: 999, marginHorizontal: 12 },

@@ -18,12 +18,13 @@ import { ArrowLeft, Calendar, Globe, IdCard, Lock, Mail, MapPin } from "lucide-r
 import * as Location from 'expo-location';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { i18n, supportedLocales, type SupportedLocale, detectDeviceLocale } from "@/lib/i18n";
+import LanguageSwitchConfirm from '@/components/LanguageSwitchConfirm';
 import en from '@/locales/en';
 import es from '@/locales/es';
 import zhHans from '@/locales/zh-Hans';
 import ja from '@/locales/ja';
 
-const LOCALE_KEY = 'app:locale';
+const LOCALE_KEY = 'i18n:locale';
 
 export default function SignupScreen() {
   const [name, setName] = useState<string>("");
@@ -35,6 +36,8 @@ export default function SignupScreen() {
   const [locationText, setLocationText] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [locale, setLocale] = useState<SupportedLocale>(detectDeviceLocale());
+  const [pendingLocale, setPendingLocale] = useState<SupportedLocale | null>(null);
+  const [confirmVisible, setConfirmVisible] = useState<boolean>(false);
 
   useEffect(() => {
     i18n.translations = { en, es, 'zh-Hans': zhHans, ja } as any;
@@ -53,6 +56,8 @@ export default function SignupScreen() {
   }, [locale]);
 
   const t = useMemo(() => i18n, [locale]);
+
+  const flagFor = (code: SupportedLocale): string => (code === 'en' ? '🇺🇸' : code === 'es' ? '🇪🇸' : code === 'ja' ? '🇯🇵' : '🇨🇳');
 
   const emailValid = useMemo(() => /[^@\s]+@[^@\s]+\.[^@\s]+/.test(email), [email]);
   const passwordStrong = useMemo(() => password.length >= 6, [password]);
@@ -111,8 +116,8 @@ export default function SignupScreen() {
               <Globe color="#fff" size={16} />
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.langChips}>
                 {(Object.keys(supportedLocales) as SupportedLocale[]).map((code) => (
-                  <TouchableOpacity key={code} style={[styles.langChip, locale === code ? styles.langChipActive : undefined]} onPress={() => setLocale(code)} testID={`lang-${code}`}>
-                    <Text style={[styles.langChipText, locale === code ? styles.langChipTextActive : undefined]}>{supportedLocales[code]}</Text>
+                  <TouchableOpacity key={code} style={[styles.langChip, locale === code ? styles.langChipActive : undefined]} onPress={() => { setPendingLocale(code); setConfirmVisible(true); }} testID={`lang-${code}`}>
+                    <Text style={[styles.langChipText, locale === code ? styles.langChipTextActive : undefined]}>{`${flagFor(code)} ${supportedLocales[code]}`}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -173,6 +178,17 @@ export default function SignupScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      <LanguageSwitchConfirm
+        visible={confirmVisible}
+        selectedLabel={pendingLocale ? supportedLocales[pendingLocale] : ''}
+        onCancel={() => { setConfirmVisible(false); setPendingLocale(null); }}
+        onConfirm={() => {
+          const next = pendingLocale ?? locale;
+          setLocale(next);
+          setConfirmVisible(false);
+          setPendingLocale(null);
+        }}
+      />
     </LinearGradient>
   );
 }

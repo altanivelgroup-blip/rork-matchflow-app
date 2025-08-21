@@ -1,13 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
-import { Stack } from 'expo-router';
-import { Languages, ToggleLeft, ToggleRight, Crown, WifiOff, RefreshCw, CalendarX2 } from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
+import { Languages, ToggleLeft, ToggleRight, Crown, WifiOff, RefreshCw, CalendarX2, CreditCard } from 'lucide-react-native';
 import { useTranslate } from '@/contexts/TranslateContext';
 import { supportedLocales, SupportedLocale } from '@/lib/i18n';
 import { useMembership } from '@/contexts/MembershipContext';
+import { openBillingPortal } from '@/lib/payments';
 
 function MembershipSection() {
   const { tier, setTier, limits, subscription, cancel, restore, refresh } = useMembership();
+  const router = useRouter();
   const statusText = (() => {
     if (subscription.status === 'active') return `Active • Renews ${subscription.renewsAtISO ? new Date(subscription.renewsAtISO).toDateString() : ''}`;
     if (subscription.status === 'expired') return 'Expired — downgraded to Free';
@@ -29,7 +31,13 @@ function MembershipSection() {
           title="Plus"
           subtitle="Unlimited swipes • Up to 12 photos • No ads • AI recommendations"
           active={tier === 'plus'}
-          onPress={async () => { await setTier('plus'); }}
+          onPress={() => {
+            try {
+              router.push('/checkout');
+            } catch (e) {
+              console.log('[Settings] navigate checkout error', e);
+            }
+          }}
         />
       </View>
       <View style={styles.subActions}>
@@ -38,10 +46,27 @@ function MembershipSection() {
           <Text style={styles.subBtnText}>Refresh status</Text>
         </TouchableOpacity>
         {tier === 'plus' ? (
-          <TouchableOpacity onPress={cancel} style={[styles.subBtn, styles.warnBtn]} testID="sub-cancel">
-            <CalendarX2 color="#B91C1C" size={14} />
-            <Text style={[styles.subBtnText, { color: '#B91C1C' }]}>Cancel</Text>
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity onPress={cancel} style={[styles.subBtn, styles.warnBtn]} testID="sub-cancel">
+              <CalendarX2 color="#B91C1C" size={14} />
+              <Text style={[styles.subBtnText, { color: '#B91C1C' }]}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={async () => {
+                try {
+                  await openBillingPortal();
+                } catch (e) {
+                  console.log('[Settings] billing portal error', e);
+                  Alert.alert('Billing', 'Unable to open billing portal.');
+                }
+              }}
+              style={styles.subBtn}
+              testID="sub-manage"
+            >
+              <CreditCard color="#111827" size={14} />
+              <Text style={styles.subBtnText}>Manage billing</Text>
+            </TouchableOpacity>
+          </>
         ) : (
           <TouchableOpacity onPress={restore} style={styles.subBtn} testID="sub-restore">
             <Crown color="#F59E0B" size={14} />

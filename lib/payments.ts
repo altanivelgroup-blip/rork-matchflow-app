@@ -6,6 +6,13 @@ export interface CheckoutResult {
   message?: string;
 }
 
+export interface CheckoutOptions {
+  planId: string;
+  currency: string;
+  amountCents: number;
+  promoCode?: string;
+}
+
 const BACKEND_URL = 'https://YOUR_BACKEND_URL';
 const TEST_CHECKOUT_URL = 'https://buy.stripe.com/test_4gw00y8Wf1kbfWc6oo';
 
@@ -20,14 +27,19 @@ async function openUrl(url: string): Promise<void> {
 }
 
 export async function startStripeCheckout(): Promise<CheckoutResult> {
+  return startStripeCheckoutWithOptions({ planId: 'premium_monthly', currency: 'USD', amountCents: 999 });
+}
+
+export async function startStripeCheckoutWithOptions(opts: CheckoutOptions): Promise<CheckoutResult> {
   try {
+    console.log('[payments] startStripeCheckoutWithOptions', opts);
     const hasBackend = BACKEND_URL && BACKEND_URL.startsWith('https://') && !BACKEND_URL.includes('YOUR_BACKEND_URL');
 
     if (hasBackend) {
       const res = await fetch(`${BACKEND_URL}/api/stripe/create-checkout-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: 'premium_monthly' }),
+        body: JSON.stringify({ plan: opts.planId, currency: opts.currency, amountCents: opts.amountCents, promoCode: opts.promoCode }),
       });
       if (!res.ok) {
         const text = await res.text();
@@ -56,5 +68,24 @@ export async function startStripeCheckout(): Promise<CheckoutResult> {
   } catch (e) {
     console.log('[payments] startStripeCheckout error', e);
     return { success: false, message: 'Unable to start checkout.' };
+  }
+}
+
+export async function openBillingPortal(): Promise<void> {
+  try {
+    const hasBackend = BACKEND_URL && BACKEND_URL.startsWith('https://') && !BACKEND_URL.includes('YOUR_BACKEND_URL');
+    if (!hasBackend) {
+      await openUrl('https://dashboard.stripe.com/test');
+      return;
+    }
+    const res = await fetch(`${BACKEND_URL}/api/stripe/billing-portal`, { method: 'POST' });
+    if (res.ok) {
+      const data = (await res.json()) as { url?: string };
+      if (data.url) await openUrl(data.url);
+      return;
+    }
+    await openUrl('https://dashboard.stripe.com/test');
+  } catch (e) {
+    console.log('[payments] openBillingPortal error', e);
   }
 }

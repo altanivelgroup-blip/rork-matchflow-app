@@ -9,7 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, router } from "expo-router";
 import { Image as ExpoImage } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
 import { Image as RNImage, Send, ImageIcon, Video as VideoIcon, Languages, Shield } from "lucide-react-native";
@@ -196,6 +196,13 @@ export default function ChatScreen() {
         <TouchableOpacity
           style={styles.attachButton}
           onPress={() => setTEnabled(!tEnabled)}
+          onLongPress={() => {
+            try {
+              router.push('/(tabs)/settings' as any);
+            } catch (e) {
+              console.log('[Chat] open settings error', e);
+            }
+          }}
           testID="toggle-translate"
         >
           <Languages color={tEnabled ? "#44D884" : "#999"} size={20} />

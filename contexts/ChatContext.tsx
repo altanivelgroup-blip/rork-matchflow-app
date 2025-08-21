@@ -49,18 +49,26 @@ class Emitter {
 export const [ChatProvider, useChat] = createContextHook<ChatContextType>(() => {
   const [messagesMap, setMessagesMap] = useState<Record<string, ChatMessage[]>>({});
   const emitterRef = useRef(new Emitter());
+  const timeoutsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  const mountedRef = useRef<boolean>(false);
   const { enabled: tEnabled, translateTo, targetLang } = useTranslate();
 
   useEffect(() => {
+    mountedRef.current = true;
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
         const parsed: Record<string, ChatMessage[]> = raw ? JSON.parse(raw) : {};
-        setMessagesMap(parsed);
+        if (mountedRef.current) setMessagesMap(parsed);
       } catch (e) {
         console.log('[Chat] load error', e);
       }
     })();
+    return () => {
+      mountedRef.current = false;
+      timeoutsRef.current.forEach((id) => clearTimeout(id));
+      timeoutsRef.current.clear();
+    };
   }, []);
 
   useEffect(() => {
@@ -115,7 +123,8 @@ export const [ChatProvider, useChat] = createContextHook<ChatContextType>(() => 
       detectedLang,
     };
     appendMessage(matchId, msg);
-    setTimeout(() => {
+    const id = setTimeout(() => {
+      if (!mountedRef.current) return;
       const echo: ChatMessage = {
         id: String(Date.now() + 1),
         matchId,
@@ -126,6 +135,7 @@ export const [ChatProvider, useChat] = createContextHook<ChatContextType>(() => 
       };
       appendMessage(matchId, echo);
     }, 600);
+    timeoutsRef.current.add(id);
   }, [appendMessage, tEnabled, translateTo, targetLang]);
 
   const requestPerms = async () => {

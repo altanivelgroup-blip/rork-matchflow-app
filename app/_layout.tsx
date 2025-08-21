@@ -46,15 +46,15 @@ export default function RootLayout() {
         <AuthProvider>
           <MatchProvider>
             <MembershipProvider>
-              <MediaProvider>
-                <ChatProvider>
-                  <TranslateProvider>
+              <TranslateProvider>
+                <MediaProvider>
+                  <ChatProvider>
                     <ErrorBoundary>
                       <RootLayoutNav />
                     </ErrorBoundary>
-                  </TranslateProvider>
-                </ChatProvider>
-              </MediaProvider>
+                  </ChatProvider>
+                </MediaProvider>
+              </TranslateProvider>
             </MembershipProvider>
           </MatchProvider>
         </AuthProvider>

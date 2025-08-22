@@ -189,7 +189,7 @@ export default function VerifyPhotoScreen() {
     setShowCamera(true);
     setIsPaused(true);
     captureGuardRef.current = { capturing: false };
-  }, [requestPermissions, t, manualCapture]);
+  }, [requestPermissions, t]);
 
   const takeNowExpr = useCallback(async () => {
     try {

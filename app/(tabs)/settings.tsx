@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { Languages, ToggleLeft, ToggleRight, Crown, WifiOff, RefreshCw, CalendarX2, CreditCard, Globe, Webcam, Image as ImageIcon, Shuffle, Sparkles, Shield, ChevronRight, WalletCards } from 'lucide-react-native';
+import { Languages, ToggleLeft, ToggleRight, Crown, WifiOff, RefreshCw, CalendarX2, CreditCard, Globe, Webcam, Image as ImageIcon, Shuffle, Sparkles, Shield, ChevronRight, WalletCards, Bell } from 'lucide-react-native';
 import { useTranslate } from '@/contexts/TranslateContext';
 import { supportedLocales, SupportedLocale } from '@/lib/i18n';
 import { useMembership } from '@/contexts/MembershipContext';
@@ -10,6 +10,7 @@ import { useI18n } from '@/contexts/I18nContext';
 import { showToast } from '@/lib/toast';
 import { backend, VerificationModePref, CaptureChoice, PreferredGateway } from '@/lib/backend';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotifications } from '@/contexts/NotificationsContext';
 
 function MembershipSection() {
   const { tier, setTier, limits, subscription, cancel, restore, refresh } = useMembership();
@@ -174,6 +175,7 @@ export default function SettingsScreen() {
     if (mountedRef.current) persist();
   }, [locale, targetLang, enabled, uid, verificationMode, captureChoice, matchAnimationsEnabled, preferredGateway]);
 
+  const notif = useNotifications();
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ title: useI18n().t('profile.settings') ?? 'Settings' }} />
@@ -188,11 +190,40 @@ export default function SettingsScreen() {
       <View style={styles.card}>
         <View style={styles.row}>
           <View style={styles.rowLeft}>
+            <Bell color="#111827" size={20} />
+            <Text style={styles.rowTitle}>Notifications</Text>
+          </View>
+          <TouchableOpacity onPress={notif.requestPermission} style={styles.toggle} testID="notif-permission">
+            {notif.permissionStatus === 'granted' ? <ToggleRight color="#10B981" size={28} /> : <ToggleLeft color="#9CA3AF" size={28} />}
+          </TouchableOpacity>
+        </View>
+        <View style={[styles.picker, { alignItems: 'center' }]}
+          testID="notif-categories">
+          {(['mutualMatch','newChat','dreamDate','dailyReminder'] as const).map(cat => {
+            const active = notif.prefs.categories[cat];
+            return (
+              <TouchableOpacity key={`cat-${cat}`} onPress={() => notif.setPrefs({ categories: { [cat]: !active } as any })} style={[styles.langItem, active && styles.langItemActive]} testID={`notif-${cat}`}>
+                <Text style={[styles.langText, active && styles.langTextActive]}>{cat}</Text>
+              </TouchableOpacity>
+            );
+          })}
+          <TouchableOpacity onPress={async () => { await notif.sendLocal({ category: 'newChat', title: 'MatchFlow', body: useI18n().t('notifications.previewPing') ?? 'Test notification sent' }); }} style={[styles.langItem, { backgroundColor: '#EEF2FF', borderColor: '#E0E7FF' }]} testID="notif-test">
+            <Text style={[styles.langText, { color: '#3730A3' }]}>Send Test</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={notif.scheduleDailyReminders} style={styles.langItem} testID="notif-schedule">
+            <Text style={styles.langText}>Schedule Daily</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.row}>
+          <View style={styles.rowLeft}>
             <Globe color="#111827" size={20} />
             <Text style={styles.rowTitle}>App Language</Text>
           </View>
         </View>
-        <View style={styles.picker}>
+        <View className="picker" style={styles.picker}>
           {entries.map(([code, label]) => {
             const active = locale === code;
             const flag = code === 'en' ? '🇺🇸' : code === 'es' ? '🇪🇸' : code === 'ja' ? '🇯🇵' : '🇨🇳';

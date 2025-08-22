@@ -106,6 +106,14 @@ export default {
     complete: 'Complete Profile',
     help: 'Answer at least 5 to continue',
   },
+  notifications: {
+    enabled: 'Notifications enabled',
+    denied: 'Notifications denied',
+    reminderTitle: 'MatchFlow',
+    reminderBody: 'New international match waiting!',
+    remindersScheduled: 'Reminders scheduled',
+    previewPing: 'Test notification sent',
+  },
   verification: {
     title: 'Photo Verification',
     subtitle: 'Verify your identity with facial recognition',

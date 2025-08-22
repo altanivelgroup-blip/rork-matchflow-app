@@ -17,6 +17,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { X, Heart, Star, MessageCircle } from "lucide-react-native";
 import { mockProfiles, type MockProfile } from "@/mocks/profiles";
 import { router } from "expo-router";
+import MatchCelebration from "@/components/MatchCelebration";
 import { useMatches } from "@/contexts/MatchContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
@@ -42,6 +43,8 @@ export default function DiscoverScreen() {
   const [tMap, setTMap] = useState<Record<string, { bio?: string; interests?: string[]; bioTranslated: boolean; interestsTranslated: boolean }>>({});
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [matchModal, setMatchModal] = useState<{ visible: boolean; profile: MockProfile | null }>({ visible: false, profile: null });
+  const [celebration, setCelebration] = useState<{ visible: boolean; intensity: number; theme: 'confetti' | 'hearts' | 'fireworks'; message: string }>({ visible: false, intensity: 0.7, theme: 'hearts', message: "Boom! It's a Match!" });
+  const [animationsEnabled, setAnimationsEnabled] = useState<boolean>(true);
 
   const aiQuery = useQuery<{ scores: { id: string; score: number; reason: string }[] }, Error>({
     queryKey: ["aiMatch", user?.email ?? "guest"],
@@ -82,13 +85,16 @@ export default function DiscoverScreen() {
           const arr = JSON.parse(likedRaw) as string[];
           setLikedIds(new Set(arr));
         }
+        const uid = user?.email ?? 'guest';
+        const s = await backend.fetchUserSettings(uid);
+        if (s && typeof s.matchAnimationsEnabled === 'boolean') setAnimationsEnabled(s.matchAnimationsEnabled);
       } catch (e) {
-        console.log('[Discover] upsell/liked load error', e);
+        console.log('[Discover] upsell/liked/settings load error', e);
       } finally {
         setUpsellChecked(true);
       }
     })();
-  }, [limits.dailySwipes]);
+  }, [limits.dailySwipes, user?.email]);
 
   const orderedProfiles: MockProfile[] = useMemo(() => {
     const scores = aiQuery.data?.scores ?? [];
@@ -211,6 +217,14 @@ export default function DiscoverScreen() {
     }
   };
 
+  const openCelebration = (score: number, name: string) => {
+    const intensity = Math.max(0.3, Math.min(1, score / 100));
+    const theme: 'confetti' | 'hearts' | 'fireworks' = score >= 80 ? 'fireworks' : score >= 60 ? 'hearts' : 'confetti';
+    const msg = `Boom! It's a Match${name ? ` with ${name}` : ''}!`;
+    setCelebration({ visible: true, intensity, theme, message: msg });
+    setTimeout(() => setCelebration((c) => ({ ...c, visible: false })), 2000 + Math.floor(800 * intensity));
+  };
+
   const swipeRight = () => {
     if (!canSwipe) { onBlocked(); return; }
     incSwipe().catch(() => {});
@@ -233,6 +247,15 @@ export default function DiscoverScreen() {
               image: profile.image,
               interests: [...profile.interests],
             });
+            if (animationsEnabled) {
+              try {
+                const sc = aiQuery.data?.scores?.find((s) => s.id === profile.id)?.score ?? 65;
+                openCelebration(sc, profile.name);
+              } catch (e) {
+                console.log('[Discover] celebration error', e);
+                openCelebration(65, profile.name);
+              }
+            }
             setMatchModal({ visible: true, profile });
           }
         })
@@ -557,6 +580,16 @@ export default function DiscoverScreen() {
           </View>
         </View>
       </Modal>
+
+      {animationsEnabled && (
+        <MatchCelebration
+          visible={celebration.visible}
+          intensity={celebration.intensity}
+          theme={celebration.theme}
+          message={celebration.message}
+          onDone={() => setCelebration((c) => ({ ...c, visible: false }))}
+        />
+      )}
 
       <UpgradeModal
         visible={showUpgrade}

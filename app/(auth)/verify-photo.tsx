@@ -361,17 +361,14 @@ export default function VerifyPhotoScreen() {
     setCurrentExpr(expr);
   }, []);
 
-  const autoOpenedRef = useRef<boolean>(false);
+  // Check if user already has camera permission on mount
   useEffect(() => {
-    if (Platform.OS !== 'web' && !autoOpenedRef.current) {
-      autoOpenedRef.current = true;
-      // Give a bit more time for the component to fully mount
-      setTimeout(() => {
-        console.log('[VerifyPhoto] Auto-opening camera on native platform');
-        openCamera();
-      }, 800);
+    if (permission?.granted) {
+      console.log('[VerifyPhoto] Camera permission already available');
+    } else {
+      console.log('[VerifyPhoto] Camera permission not yet granted');
     }
-  }, [openCamera]);
+  }, [permission?.granted]);
 
   return (
     <SafeAreaView style={styles.container}>

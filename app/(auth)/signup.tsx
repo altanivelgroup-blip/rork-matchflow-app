@@ -114,8 +114,8 @@ export default function SignupScreen() {
       await AsyncStorage.setItem('signup:basic', JSON.stringify(signupData));
       await analytics.track('sign_up', { locale, age: Number(age), country: locationText || 'unknown' });
       
-      // Navigate to photo verification
-      router.push("/verify-photo" as any);
+      // Navigate to permissions prompt first
+      router.push("/(auth)/permissions-prompt" as any);
     } catch (e) {
       console.log('[Signup] error:', e);
       Alert.alert(i18nProxy.t('errors.signupFailed') ?? 'Signup failed', i18nProxy.t('errors.tryAgain') ?? 'Please try again.');

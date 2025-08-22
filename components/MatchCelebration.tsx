@@ -125,29 +125,62 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
           if (Platform.OS !== 'web') {
             try {
               const { Audio } = await import('expo-av');
-              await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false, staysActiveInBackground: false });
+              await Audio.setAudioModeAsync({
+                playsInSilentModeIOS: true,
+                allowsRecordingIOS: false,
+                staysActiveInBackground: false,
+                shouldDuckAndroid: true,
+                playThroughEarpieceAndroid: false,
+                interruptionModeAndroid: 1,
+                interruptionModeIOS: 1,
+              } as any);
               if (soundRef.current) {
                 await soundRef.current.unloadAsync();
                 soundRef.current = null;
               }
               const isHuge = clampedIntensity >= 0.9;
-              const boomUri = (soundBoomUrl ?? SOUND_BOOM_MP3 ?? SOUND_BOOM_WAV_FALLBACK);
+              const boomCandidates = [soundBoomUrl, SOUND_BOOM_MP3, SOUND_BOOM_WAV_FALLBACK].filter(Boolean) as string[];
               const initialStatus = { volume: Math.max(0, Math.min(1, volume)), shouldPlay: true } as const;
-              const { sound: boom } = await Audio.Sound.createAsync({ uri: boomUri }, initialStatus);
+
+              let boom: any = null;
+              let lastErr: unknown = null;
+              for (const uri of boomCandidates) {
+                try {
+                  const created = await Audio.Sound.createAsync({ uri }, initialStatus);
+                  boom = created.sound;
+                  break;
+                } catch (e) {
+                  lastErr = e;
+                  console.log('[MatchCelebration] failed to load boom candidate', uri, e);
+                }
+              }
+              if (!boom) throw lastErr ?? new Error('Unable to load any boom candidate');
               soundRef.current = boom as unknown as { unloadAsync: () => Promise<void>; setOnPlaybackStatusUpdate: (fn: (s: any) => void) => void };
               boom.setOnPlaybackStatusUpdate((s: any) => {
                 if (s?.isLoaded && s?.didJustFinish) {
-                  boom.unloadAsync().catch(() => {});
+                  (boom as any).unloadAsync?.().catch(() => {});
                   soundRef.current = null;
                 }
               });
               if (isHuge) {
                 setTimeout(async () => {
                   try {
-                    const popUri = (soundPopUrl ?? SOUND_POP_MP3 ?? SOUND_POP_WAV_FALLBACK);
-                    const { sound: pop } = await Audio.Sound.createAsync({ uri: popUri }, { volume: Math.max(0, Math.min(1, volume * 0.8)), shouldPlay: true });
+                    const popCandidates = [soundPopUrl, SOUND_POP_MP3, SOUND_POP_WAV_FALLBACK].filter(Boolean) as string[];
+                    let pop: any = null;
+                    let lastErrPop: unknown = null;
+                    for (const uri of popCandidates) {
+                      try {
+                        const created = await Audio.Sound.createAsync({ uri }, { volume: Math.max(0, Math.min(1, volume * 0.8)), shouldPlay: true });
+                        pop = created.sound;
+                        break;
+                      } catch (e) {
+                        lastErrPop = e;
+                        console.log('[MatchCelebration] failed to load pop candidate', uri, e);
+                      }
+                    }
+                    if (!pop) throw lastErrPop ?? new Error('Unable to load any pop candidate');
                     pop.setOnPlaybackStatusUpdate((s: any) => {
-                      if (s?.isLoaded && s?.didJustFinish) pop.unloadAsync().catch(() => {});
+                      if (s?.isLoaded && s?.didJustFinish) (pop as any).unloadAsync?.().catch(() => {});
                     });
                   } catch (err) {
                     console.log('[MatchCelebration] pop sound error', err);
@@ -228,7 +261,13 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
   const burstHeight = 360 + Math.floor(120 * clampedIntensity);
 
   return (
-    <View pointerEvents="none" style={styles.overlay} testID="match-celebration">
+    <View
+      pointerEvents="auto"
+      style={styles.overlay}
+      testID="match-celebration"
+      onStartShouldSetResponder={() => true}
+      onResponderRelease={() => {}}
+    >
       <Animated.View style={[styles.flash, { opacity: flashOpacity }]} />
       <Animated.View style={[styles.ring, { top: H / 2 - 40, left: W / 2 - 40, transform: [{ scale: ringScale }], opacity: ringOpacity }]} />
 

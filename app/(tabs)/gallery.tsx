@@ -433,11 +433,11 @@ export default function GalleryScreen() {
   const [animationsEnabled, setAnimationsEnabled] = useState<boolean>(true);
   const [showUpgrade, setShowUpgrade] = useState<boolean>(false);
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
-  const [previewMode, setPreviewMode] = useState<boolean>(false);
+  const [previewMode, setPreviewMode] = useState<boolean>(isTablet);
   const [previewProfile, setPreviewProfile] = useState<MockProfile | null>(null);
-  const [devBypass, setDevBypass] = useState<boolean>(true);
+  const [devBypass, setDevBypass] = useState<boolean>(!isTablet);
   const [tempIntensity, setTempIntensity] = useState<number>(7);
-  const [devBarOpen, setDevBarOpen] = useState<boolean>(true);
+  const [devBarOpen, setDevBarOpen] = useState<boolean>(!isTablet);
   
   const { addMatch } = useMatches();
   const analytics = useAnalytics();
@@ -694,22 +694,16 @@ export default function GalleryScreen() {
         void playClickFx(intensity > 0.7 ? 'boom' : 'pop', tempIntensity);
         return;
       }
-      const isMatched = Boolean((useMatches as any) && false);
       if (previewMode) {
         setPreviewProfile(profile);
         return;
       }
-      const matchesCtx = undefined;
-      const isActuallyMatched = false;
-      if (isActuallyMatched) {
-        router.push(`/chat/${profile.id}` as any);
-        return;
-      }
-      console.log('[Gallery] blocked navigation to non-existent details, enable preview to see profile');
+      // Default fallback on tablets and when preview is off: open preview to avoid invalid navigation
+      setPreviewProfile(profile);
     } catch (e) {
       console.log('[Gallery] onPressCardGuarded error', e);
     }
-  }, [devBypass, aiScoresMap, tempIntensity, previewMode]);
+  }, [devBypass, aiScoresMap, tempIntensity, previewMode, playClickFx]);
   
   const handleLike = useCallback(async (profile: MockProfile) => {
     if (!canSwipe) {

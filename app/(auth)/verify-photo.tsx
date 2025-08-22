@@ -1,13 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, ActivityIndicator, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Camera as CameraIcon, ArrowLeft, Timer as TimerIcon, RefreshCcw, CheckCircle2, ChevronRight, ShieldCheck, ShieldAlert, Crown, Image as ImageIcon, Webcam, ImageOff, Shuffle, AlertCircle, User } from 'lucide-react-native';
+import { Camera as CameraIcon, ArrowLeft, Timer as TimerIcon, RefreshCcw, CheckCircle2, ChevronRight, ShieldCheck, ShieldAlert, Crown, Webcam, ImageOff, AlertCircle, User, XCircle, Camera } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
-import { runFaceVerification, configureFaceVerification, faceVectorFromDetails, compareStaticToLive, verifySingleImage } from '@/lib/faceVerification';
-import { getEffectiveCapture, getGatingMode, canStartLiveCapture, verificationFlags, livenessParams, type CaptureChoice as CaptureChoiceConst, type VerificationModePref as VerificationModePrefConst } from '@/lib/verificationGuards';
+import { runFaceVerification, configureFaceVerification, type PoseCaptureMeta as PoseCaptureMetaAngles, verifySingleImage } from '@/lib/faceVerification';
 import PrivacyNote from '@/components/PrivacyNote';
 import { useMembership } from '@/contexts/MembershipContext';
 import { backend, VerificationModePref, CaptureChoice } from '@/lib/backend';
@@ -17,8 +16,9 @@ import { useToast } from '@/contexts/ToastContext';
 import { getFirebase } from '@/lib/firebase';
 import { ref as storageRef, uploadString, type UploadMetadata } from 'firebase/storage';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { CameraView } from 'expo-camera';
 
-type PoseKey = 'front' | 'left' | 'right';
+type ExpressionKey = 'neutral' | 'smile' | 'sad';
 
 interface PoseCaptureMeta {
   uri: string;
@@ -30,9 +30,8 @@ export default function VerifyPhotoScreen() {
   const [secondsLeft, setSecondsLeft] = useState<number>(120);
   const { tier } = useMembership();
   const [isRequestingPerms, setIsRequestingPerms] = useState<boolean>(false);
-  const [compareResult, setCompareResult] = useState<{ ok: boolean; similarity?: number; reason?: string } | null>(null);
-  const [photos, setPhotos] = useState<Record<PoseKey, PoseCaptureMeta | null>>({ front: null, left: null, right: null });
-  const [currentPose, setCurrentPose] = useState<PoseKey>('front');
+  const [photos, setPhotos] = useState<Record<ExpressionKey, PoseCaptureMeta | null>>({ neutral: null, smile: null, sad: null });
+  const [currentExpr, setCurrentExpr] = useState<ExpressionKey>('neutral');
   const [expiredPromptShown, setExpiredPromptShown] = useState<boolean>(false);
   const [verifying, setVerifying] = useState<boolean>(false);
   const [verificationError, setVerificationError] = useState<string | null>(null);
@@ -41,8 +40,13 @@ export default function VerifyPhotoScreen() {
   const { t } = useI18n();
   const { show: showToast } = useToast();
   const uid = user?.email ?? 'guest';
-  const [verificationMode, setVerificationMode] = useState<VerificationModePrefConst>('auto');
-  const [captureChoice, setCaptureChoice] = useState<CaptureChoiceConst>('static');
+  const [verificationMode, setVerificationMode] = useState<VerificationModePref>('auto');
+  const [captureChoice, setCaptureChoice] = useState<CaptureChoice>('static');
+
+  const [showCamera, setShowCamera] = useState<boolean>(false);
+  const cameraRef = useRef<CameraView | null>(null);
+  const captureGuardRef = useRef<{ capturing: boolean }>({ capturing: false });
+  const autoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -75,42 +79,38 @@ export default function VerifyPhotoScreen() {
     return () => { cancelled = true; };
   }, [uid]);
 
-
-
   const resetAll = useCallback(() => {
-    setPhotos({ front: null, left: null, right: null });
-    setCurrentPose('front');
+    setPhotos({ neutral: null, smile: null, sad: null });
+    setCurrentExpr('neutral');
     setSecondsLeft(120);
     setExpiredPromptShown(false);
     setVerificationError(null);
     setVerifying(false);
     verificationStartedAtRef.current = Date.now();
-  }, []);
-
-  const retryCurrentStep = useCallback(() => {
-    setExpiredPromptShown(false);
+    captureGuardRef.current = { capturing: false };
+    if (autoTimerRef.current) { clearTimeout(autoTimerRef.current); autoTimerRef.current = null; }
   }, []);
 
   useEffect(() => {
     if (secondsLeft === 0 && !expiredPromptShown) {
       setExpiredPromptShown(true);
       Alert.alert(
-        'Timer expired',
-        'Time is up. You can restart the 2‑minute timer to try again.',
+        t('verification.timerExpiredTitle') ?? 'Timer expired',
+        t('verification.timerExpiredBody') ?? 'Time is up. You can restart the 2‑minute timer to try again.',
         [
-          { text: 'Restart 2‑min timer', style: 'destructive', onPress: resetAll },
+          { text: t('verification.restartTimer') ?? 'Restart 2‑min timer', style: 'destructive', onPress: resetAll },
         ],
         { cancelable: false }
       );
     }
-  }, [secondsLeft, expiredPromptShown, retryCurrentStep, resetAll]);
+  }, [secondsLeft, expiredPromptShown, resetAll, t]);
 
   const requestPermissions = useCallback(async () => {
     try {
       setIsRequestingPerms(true);
       const cam = await ImagePicker.requestCameraPermissionsAsync();
       if (!cam.granted) {
-        Alert.alert('Permissions required', 'Please allow camera access to continue.');
+        Alert.alert(t('verification.permsTitle') ?? 'Permissions required', t('verification.permsBody') ?? 'Please allow camera access to continue.');
         return false;
       }
       return true;
@@ -120,15 +120,13 @@ export default function VerifyPhotoScreen() {
     } finally {
       setIsRequestingPerms(false);
     }
-  }, []);
+  }, [t]);
 
-  const instruction = useMemo(() => {
-    if (currentPose === 'front') return t('verification.instructionFront') ?? 'Center your face and take a front-facing selfie';
-    if (currentPose === 'left') return t('verification.instructionLeft') ?? 'Turn your head to your LEFT and keep shoulders visible';
-    return t('verification.instructionRight') ?? 'Turn your head to your RIGHT and keep shoulders visible';
-  }, [currentPose, t]);
-
-  const effectiveCapture: CaptureChoiceConst = useMemo(() => getEffectiveCapture(verificationMode, captureChoice), [verificationMode, captureChoice]);
+  const exprInstruction = useMemo(() => {
+    if (currentExpr === 'neutral') return t('verification.exprNeutral') ?? 'Neutral face 😐 — look straight at the camera';
+    if (currentExpr === 'smile') return t('verification.exprSmile') ?? 'Smile 😊 — show a clear smile';
+    return t('verification.exprSad') ?? 'Sad 😔 — relax your smile';
+  }, [currentExpr, t]);
 
   const formatTime = useCallback((total: number) => {
     const m = Math.floor(total / 60);
@@ -138,13 +136,59 @@ export default function VerifyPhotoScreen() {
     return `${mm}:${ss}`;
   }, []);
 
-  const captureCurrent = useCallback(async () => {
+  const openCamera = useCallback(async () => {
     const ok = await requestPermissions();
     if (!ok) return;
-    if (effectiveCapture === 'live') {
-      const gate = canStartLiveCapture();
-      if (!gate.ok) Alert.alert('Switching to Static', gate.reason ?? '');
+    if (Platform.OS === 'web') {
+      Alert.alert(t('verification.webManualTitle') ?? 'Manual capture on web', t('verification.webManualBody') ?? 'Auto face detection is not available on web. We will open your device camera or file picker for each expression.');
+      await manualCapture();
+      return;
     }
+    setShowCamera(true);
+    captureGuardRef.current = { capturing: false };
+  }, [requestPermissions, t]);
+
+  const takeNowExpr = useCallback(async () => {
+    try {
+      if (captureGuardRef.current.capturing) return;
+      captureGuardRef.current.capturing = true;
+      const cam = cameraRef.current;
+      if (!cam) {
+        captureGuardRef.current.capturing = false;
+        return;
+      }
+      const photo = await cam.takePictureAsync({ quality: 1, skipProcessing: false });
+      let size: number | null = null;
+      try {
+        const info = await FileSystem.getInfoAsync(photo.uri, { size: true });
+        const s = (info as unknown as { size?: number }).size;
+        size = typeof s === 'number' ? s : null;
+      } catch (e) {
+        console.log('[VerifyPhoto] take picture size error', e);
+      }
+      setPhotos((prev) => ({ ...prev, [currentExpr]: { uri: photo.uri, capturedAt: Date.now(), byteSize: size } }));
+      setShowCamera(false);
+      captureGuardRef.current = { capturing: false };
+      if (currentExpr === 'neutral') setCurrentExpr('smile');
+      else if (currentExpr === 'smile') setCurrentExpr('sad');
+    } catch (e) {
+      console.log('[VerifyPhoto] takeNow error', e);
+      captureGuardRef.current = { capturing: false };
+    }
+  }, [currentExpr]);
+
+  useEffect(() => {
+    if (!showCamera) return;
+    if (autoTimerRef.current) clearTimeout(autoTimerRef.current as any);
+    autoTimerRef.current = setTimeout(() => {
+      takeNowExpr();
+    }, 1800);
+    return () => {
+      if (autoTimerRef.current) { clearTimeout(autoTimerRef.current as any); autoTimerRef.current = null; }
+    };
+  }, [showCamera, takeNowExpr]);
+
+  const manualCapture = useCallback(async () => {
     try {
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -155,7 +199,6 @@ export default function VerifyPhotoScreen() {
       if (result.canceled) return;
       const asset = result.assets?.[0];
       if (!asset?.uri) return;
-
       const single = await verifySingleImage(asset.uri);
       if (!single.ok) {
         const errorMsg = t('verification.faceRequired') ?? 'Face required';
@@ -164,97 +207,58 @@ export default function VerifyPhotoScreen() {
         showToast(errorDetail);
         return;
       }
-
       let size: number | null = null;
       try {
         const info = await FileSystem.getInfoAsync(asset.uri, { size: true });
-        if (info.exists && typeof (info as any).size === 'number') {
-          size = (info as any).size as number;
-        } else {
-          size = null;
-        }
+        const s = (info as unknown as { size?: number }).size;
+        size = typeof s === 'number' ? s : null;
       } catch (e) {
         console.log('[VerifyPhoto] file size error', e);
       }
-
-      setPhotos((prev) => ({
-        ...prev,
-        [currentPose]: { uri: asset.uri, capturedAt: Date.now(), byteSize: size },
-      }));
-      if (currentPose === 'front') setCurrentPose('left');
-      else if (currentPose === 'left') setCurrentPose('right');
+      setPhotos((prev) => ({ ...prev, [currentExpr]: { uri: asset.uri, capturedAt: Date.now(), byteSize: size } }));
+      if (currentExpr === 'neutral') setCurrentExpr('smile');
+      else if (currentExpr === 'smile') setCurrentExpr('sad');
     } catch (e) {
-      console.log('[VerifyPhoto] capture error', e);
-      const errorMsg = t('verification.cameraError') ?? 'Camera error';
-      const errorDetail = t('verification.cameraErrorDetail') ?? 'Unable to open camera. Try again.';
-      Alert.alert(errorMsg, errorDetail);
-      showToast(errorDetail);
+      console.log('[VerifyPhoto] manual capture error', e);
+      Alert.alert(t('verification.cameraError') ?? 'Camera error', t('verification.cameraErrorDetail') ?? 'Unable to open camera. Try again.');
+      showToast(t('verification.cameraErrorDetail') ?? 'Unable to open camera. Try again.');
     }
-  }, [currentPose, requestPermissions, effectiveCapture]);
+  }, [currentExpr, showToast, t]);
 
-  const allReady = useMemo(() => !!(photos.front && photos.left && photos.right), [photos]);
+  const allReady = useMemo(() => !!(photos.neutral && photos.smile && photos.sad), [photos]);
 
   const verifyPhotos = useCallback(async (): Promise<{ ok: boolean; reason?: string; score?: number; faceVector?: number[] | null }> => {
     try {
       setVerifying(true);
       setVerificationError(null);
-      const pFront = photos.front;
-      const pLeft = photos.left;
-      const pRight = photos.right;
-      if (!pFront || !pLeft || !pRight) return { ok: false, reason: 'Missing photos' };
-
-      const distinctUris = new Set([pFront.uri, pLeft.uri, pRight.uri]);
-      if (distinctUris.size < 3) {
-        return { ok: false, reason: t('verification.duplicateImages') ?? 'Duplicate images detected. Please retake different angles.' };
-      }
-
-      if (!(pFront.capturedAt < pLeft.capturedAt && pLeft.capturedAt < pRight.capturedAt)) {
-        return { ok: false, reason: t('verification.wrongOrder') ?? 'Photos must be captured in order: Front, then Left, then Right.' };
-      }
-
+      const pNeutral = photos.neutral;
+      const pSmile = photos.smile;
+      const pSad = photos.sad;
+      if (!pNeutral || !pSmile || !pSad) return { ok: false, reason: 'Missing photos' };
+      const distinctUris = new Set([pNeutral.uri, pSmile.uri, pSad.uri]);
+      if (distinctUris.size < 3) return { ok: false, reason: t('verification.duplicateImages') ?? 'Duplicate images detected. Please retake different expressions.' };
       const elapsed = Date.now() - verificationStartedAtRef.current;
-      if (elapsed > 2 * 60 * 1000 + 15 * 1000) {
-        return { ok: false, reason: t('verification.timeExpired') ?? 'Capture window expired. Please retry within 2 minutes.' };
-      }
-
-      const sizes = [pFront.byteSize ?? 0, pLeft.byteSize ?? 0, pRight.byteSize ?? 0];
-      const avg = sizes.reduce((a, b) => a + b, 0) / sizes.length;
-      const variance = sizes.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / sizes.length;
-      if (tier !== 'plus') {
-        if (isFinite(variance) && avg > 0 && variance > Math.pow(avg * 0.9, 2)) {
-          return { ok: false, reason: t('verification.inconsistentLighting') ?? 'Inconsistent image data detected. Please retake in the same lighting.' };
-        }
-      }
-
-      if (tier === 'plus') {
-        await new Promise((r) => setTimeout(r, 200));
-      } else {
-        await new Promise((r) => setTimeout(r, 1200));
-      }
-
-      const external = await runFaceVerification({ front: pFront, left: pLeft, right: pRight });
-      if (!external.ok) {
-        return { ok: false, reason: external.reason ?? t('verification.verificationFailed') ?? 'Face verification failed.' };
-      }
-      const vec = faceVectorFromDetails(external.details ?? null);
-      return { ok: true, score: external.score, faceVector: vec };
+      if (elapsed > 2 * 60 * 1000 + 15 * 1000) return { ok: false, reason: t('verification.timeExpired') ?? 'Capture window expired. Please retry within 2 minutes.' };
+      const anglesInput = { front: pNeutral, left: pSmile, right: pSad } as unknown as { front: PoseCaptureMetaAngles; left: PoseCaptureMetaAngles; right: PoseCaptureMetaAngles };
+      const external = await runFaceVerification(anglesInput);
+      if (!external.ok) return { ok: false, reason: external.reason ?? t('verification.verificationFailed') ?? 'Face verification failed.' };
+      return { ok: true, score: external.score, faceVector: null };
     } catch (e) {
       console.log('[VerifyPhoto] verify error', e);
       return { ok: false, reason: t('verification.unexpectedError') ?? 'Unexpected verification error.' };
     } finally {
       setVerifying(false);
     }
-  }, [photos]);
+  }, [photos, t]);
 
   const proceed = useCallback(async () => {
     if (!allReady) {
       const title = t('verification.incompleteTitle') ?? 'Incomplete Verification';
-      const message = t('verification.incompleteMessage') ?? 'Please capture all three photos (front, left, right) to continue with verification.';
+      const message = t('verification.incompleteMessageExpr') ?? 'Please capture all three photos (neutral, smile, sad) to continue with verification.';
       Alert.alert(title, message, [{ text: t('common.ok') ?? 'OK' }]);
       showToast(message);
       return;
     }
-
     const result = await verifyPhotos();
     if (!result.ok) {
       const baseMsg = result.reason ?? t('verification.verificationFailedGeneric') ?? 'Verification failed. Please try again.';
@@ -271,67 +275,9 @@ export default function VerifyPhotoScreen() {
       );
       return;
     }
-
     try {
-      await AsyncStorage.setItem('verification_photos_v1', JSON.stringify(photos));
+      await AsyncStorage.setItem('verification_photos_expr_v1', JSON.stringify(photos));
       await AsyncStorage.setItem('verification_passed_v1', 'true');
-      if (typeof result.score === 'number') {
-        await AsyncStorage.setItem('verification_score_v1', String(result.score));
-      }
-      if (result.faceVector && Array.isArray(result.faceVector)) {
-        await AsyncStorage.setItem('face_vector_v1', JSON.stringify(result.faceVector));
-      }
-
-      const signupDataStr = await AsyncStorage.getItem('signup:basic');
-      let verifiedUserData: Record<string, unknown> | null = null;
-      if (signupDataStr) {
-        const signupData = JSON.parse(signupDataStr) as Record<string, unknown>;
-        verifiedUserData = {
-          ...signupData,
-          verificationScore: result.score ?? null,
-          verificationTimestamp: Date.now(),
-          faceVector: result.faceVector ?? null,
-          isVerified: true,
-        } as Record<string, unknown>;
-        await AsyncStorage.setItem('verified_user_data', JSON.stringify(verifiedUserData));
-      }
-
-      try {
-        const { storage, db } = getFirebase();
-        const userId = (user?.email ?? 'guest').replace(/[^a-zA-Z0-9_-]/g, '_');
-        const poseKeys: Array<'front' | 'left' | 'right'> = ['front', 'left', 'right'];
-        for (const k of poseKeys) {
-          const meta = photos[k];
-          if (!meta?.uri) continue;
-          try {
-            const base64 = await FileSystem.readAsStringAsync(meta.uri, { encoding: FileSystem.EncodingType.Base64 });
-            const dataUrl = `data:image/jpeg;base64,${base64}`;
-            const path = `verification/${userId}/${k}-${meta.capturedAt}.jpg`;
-            const sref = storageRef(storage, path);
-            const metadata: UploadMetadata = { contentType: 'image/jpeg', customMetadata: { pose: k, capturedAt: String(meta.capturedAt) } };
-            await uploadString(sref, dataUrl, 'data_url', metadata);
-          } catch (e) {
-            console.log('[VerifyPhoto] upload error', k, e);
-          }
-        }
-        const docRef = doc(db, 'users', userId, 'verification', 'latest');
-        await setDoc(docRef, {
-          userId,
-          score: result.score ?? null,
-          faceVector: result.faceVector ?? null,
-          createdAt: serverTimestamp(),
-          photos: {
-            front: photos.front?.capturedAt ?? null,
-            left: photos.left?.capturedAt ?? null,
-            right: photos.right?.capturedAt ?? null,
-          },
-        });
-        console.log('[VerifyPhoto] uploaded verification to Firebase for', userId);
-      } catch (e) {
-        console.log('[VerifyPhoto] Firebase not configured or failed, skipping cloud save', e);
-      }
-
-      showToast(t('verification.verificationSuccess') ?? 'Verification successful!');
       router.push('/(auth)/profile-setup' as any);
     } catch (e) {
       console.log('[VerifyPhoto] persist photos error', e);
@@ -339,11 +285,11 @@ export default function VerifyPhotoScreen() {
       Alert.alert(t('common.error') ?? 'Error', errorMsg);
       showToast(errorMsg);
     }
-  }, [allReady, photos, resetAll, verifyPhotos, user]);
+  }, [allReady, photos, resetAll, showToast, t, verifyPhotos]);
 
-  const resetPose = useCallback((pose: PoseKey) => {
-    setPhotos((p) => ({ ...p, [pose]: null }));
-    setCurrentPose(pose);
+  const resetExpr = useCallback((expr: ExpressionKey) => {
+    setPhotos((p) => ({ ...p, [expr]: null }));
+    setCurrentExpr(expr);
   }, []);
 
   return (
@@ -352,7 +298,7 @@ export default function VerifyPhotoScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()} testID="back-button">
           <ArrowLeft color="#333" size={24} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Photo Verification</Text>
+        <Text style={styles.headerTitle}>{t('verification.title') ?? 'Photo Verification'}</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -364,75 +310,40 @@ export default function VerifyPhotoScreen() {
       {tier === 'plus' ? (
         <View style={styles.fastLane} testID="premium-fastlane">
           <Crown color="#F59E0B" size={16} />
-          <Text style={styles.fastLaneText}>Premium Fast Lane: prioritized verification</Text>
+          <Text style={styles.fastLaneText}>{t('verification.fastLane') ?? 'Premium Fast Lane: prioritized verification'}</Text>
         </View>
       ) : null}
 
       <View style={styles.body}>
         <View style={styles.instructionCard}>
           <User color="#FF6B6B" size={20} />
-          <Text style={styles.instructionTitle}>Face Verification Required</Text>
+          <Text style={styles.instructionTitle}>{t('verification.requireTitle') ?? 'Face Verification Required'}</Text>
           <Text style={styles.instructionText}>
-            Take 3 photos of yourself from different angles to verify your identity. This helps keep MatchFlow safe and authentic.
+            {t('verification.requireBodyExpr') ?? 'After starting the camera, we will auto‑capture three expressions in sequence: Neutral 😐, Smile 😊, and Sad 😔. Keep good lighting and center your face.'}
           </Text>
         </View>
-        
-        <PrivacyNote text="Photos are processed locally when possible. Your privacy is protected and images are only stored with your consent." />
-        <View style={styles.modeBar}>
-          <Shuffle color="#6B7280" size={16} />
-          <Text style={styles.modeText}>Mode: {verificationMode === 'auto' ? 'Auto-switch' : verificationMode === 'manual' ? 'Manual' : 'Auto + Override'}</Text>
-          <Text style={styles.modeText}>Capture: {effectiveCapture === 'live' ? 'Live Preview' : 'Static'}</Text>
-          <Text style={styles.modeText}>Liveness: {livenessParams.frames} frames / {Math.round(livenessParams.windowMs/100)/10}s, ε={livenessParams.stabilityEpsilon}</Text>
-        </View>
-        {verificationMode !== 'auto' ? (
-          <View style={styles.modePicker}>
-            {(['live','static'] as CaptureChoice[]).map((c) => {
-              const active = effectiveCapture === c;
-              const disabled = Platform.OS === 'web' && c === 'live';
-              return (
-                <TouchableOpacity
-                  key={c}
-                  style={[styles.modeItem, active && styles.modeItemActive, disabled && styles.itemDisabled]}
-                  onPress={() => !disabled && setCaptureChoice(c)}
-                  disabled={disabled}
-                  testID={`mode-${c}`}
-                >
-                  {c === 'live' ? <Webcam color={active ? '#065F46' : '#374151'} size={16} /> : <ImageOff color={active ? '#065F46' : '#374151'} size={16} />}
-                  <Text style={[styles.modeTextOption, active && styles.modeTextActive, disabled && styles.textDisabled]}>{c === 'live' ? 'Live Preview' : 'Static'}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        ) : null}
+
+        <PrivacyNote text={t('verification.privacyNote') ?? 'Photos are processed locally when possible. Your privacy is protected and images are only stored with your consent.'} />
+
         <View style={styles.stepContainer}>
-          <Text style={styles.stepTitle}>Step {currentPose === 'front' ? '1' : currentPose === 'left' ? '2' : '3'} of 3</Text>
-          <Text style={styles.instruction} testID="pose-instruction">{instruction}</Text>
-          
-          {currentPose === 'front' && (
-            <View style={styles.tipCard}>
-              <AlertCircle color="#F59E0B" size={16} />
-              <Text style={styles.tipText}>Look directly at the camera with good lighting</Text>
-            </View>
-          )}
-          
-          {(currentPose === 'left' || currentPose === 'right') && (
-            <View style={styles.tipCard}>
-              <AlertCircle color="#F59E0B" size={16} />
-              <Text style={styles.tipText}>Turn your head while keeping shoulders visible</Text>
-            </View>
-          )}
+          <Text style={styles.stepTitle}>{t('verification.stepOfThree') ?? 'Step'} {currentExpr === 'neutral' ? '1' : currentExpr === 'smile' ? '2' : '3'} {t('verification.ofThree') ?? 'of 3'}</Text>
+          <Text style={styles.instruction} testID="expr-instruction">{exprInstruction}</Text>
+          <View style={styles.tipCard}>
+            <AlertCircle color="#F59E0B" size={16} />
+            <Text style={styles.tipText}>{t('verification.tipLighting') ?? 'Use even lighting and hold steady while we auto‑capture when the expression is detected.'}</Text>
+          </View>
         </View>
 
         <View style={styles.slotsRow}>
-          {(['front','left','right'] as PoseKey[]).map((pose) => {
-            const ready = !!photos[pose];
-            const label = pose === 'front' ? 'Front' : pose === 'left' ? 'Left' : 'Right';
+          {(['neutral','smile','sad'] as ExpressionKey[]).map((expr) => {
+            const ready = !!photos[expr];
+            const label = expr === 'neutral' ? (t('verification.neutral') ?? 'Neutral') : expr === 'smile' ? (t('verification.smile') ?? 'Smile') : (t('verification.sad') ?? 'Sad');
             return (
               <TouchableOpacity
-                key={pose}
-                style={[styles.slot, ready ? styles.slotReady : pose === currentPose ? styles.slotActive : undefined]}
-                onPress={() => setCurrentPose(pose)}
-                testID={`slot-${pose}`}
+                key={expr}
+                style={[styles.slot, ready ? styles.slotReady : expr === currentExpr ? styles.slotActive : undefined]}
+                onPress={() => setCurrentExpr(expr)}
+                testID={`slot-${expr}`}
                 accessibilityRole="button"
                 accessibilityLabel={`${label} photo ${ready ? 'completed' : 'pending'}`}
               >
@@ -442,7 +353,7 @@ export default function VerifyPhotoScreen() {
                     <Text style={styles.slotLabel}>{label}</Text>
                   </View>
                 ) : (
-                  <Text style={[styles.slotLabel, pose === currentPose ? styles.slotLabelActive : undefined]}>{label}</Text>
+                  <Text style={[styles.slotLabel, expr === currentExpr ? styles.slotLabelActive : undefined]}>{label}</Text>
                 )}
               </TouchableOpacity>
             );
@@ -451,60 +362,20 @@ export default function VerifyPhotoScreen() {
 
         <TouchableOpacity
           style={[styles.captureButton, isRequestingPerms ? styles.captureDisabled : undefined]}
-          onPress={captureCurrent}
+          onPress={openCamera}
           disabled={isRequestingPerms}
-          testID="capture-current"
+          testID="open-camera"
         >
           <CameraIcon color="#fff" size={20} />
-          <Text style={styles.captureText}>Capture {currentPose === 'front' ? 'Front' : currentPose === 'left' ? 'Left' : 'Right'}</Text>
+          <Text style={styles.captureText}>{t('verification.startCamera') ?? 'Start camera for auto‑capture'}</Text>
           <ChevronRight color="#fff" size={18} />
         </TouchableOpacity>
 
-        <View style={styles.compareRow}>
-          <TouchableOpacity
-            style={styles.compareButton}
-            onPress={async () => {
-              try {
-                const lib = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 1 });
-                if (lib.canceled) return;
-                const asset = lib.assets?.[0];
-                if (!asset?.uri) return;
-                if (!photos.front) {
-                  Alert.alert('Need front selfie', 'Capture your front selfie first.');
-                  return;
-                }
-                setCompareResult(null);
-                const res = await compareStaticToLive(asset.uri, photos.front.uri, photos.left?.uri ?? null, photos.right?.uri ?? null);
-                setCompareResult({ ok: res.ok, similarity: res.similarity, reason: res.reason });
-                if (!res.ok) {
-                  Alert.alert('Photo mismatch', res.reason ?? 'Uploaded photo does not match live selfies.');
-                }
-              } catch (e) {
-                Alert.alert('Error', 'Unable to compare photo.');
-              }
-            }}
-            testID="compare-static"
-          >
-            <ImageIcon color="#FF6B6B" size={16} />
-            <Text style={styles.compareText}>Compare uploaded selfie</Text>
-          </TouchableOpacity>
-          {compareResult ? (
-            <Text style={styles.compareHint} testID="compare-result">{compareResult.ok ? `Similarity ${(Math.round((compareResult.similarity ?? 0)*100))}%` : (compareResult.reason ?? 'Not similar')}</Text>
-          ) : null}
-        </View>
-
-        {verificationError ? (
-          <View style={styles.errorBanner} testID="verification-error">
-            <ShieldAlert color="#b91c1c" size={18} />
-            <Text style={styles.errorText}>{verificationError}</Text>
-          </View>
-        ) : null}
-
         <View style={styles.retakeRow}>
-          {(['front','left','right'] as PoseKey[]).map((pose) => (
-            <TouchableOpacity key={`retake-${pose}`} onPress={() => resetPose(pose)} style={styles.retakeButton} testID={`retake-${pose}`}>
+          {(['neutral','smile','sad'] as ExpressionKey[]).map((expr) => (
+            <TouchableOpacity key={`retake-${expr}`} onPress={() => resetExpr(expr)} style={styles.retakeButton} testID={`retake-${expr}`}>
               <RefreshCcw color="#999" size={14} />
-              <Text style={styles.retakeText}>Retake {pose}</Text>
+              <Text style={styles.retakeText}>{(t('verification.retake') ?? 'Retake')} {expr}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -518,20 +389,49 @@ export default function VerifyPhotoScreen() {
           {verifying ? (
             <View style={styles.verifyingRow}>
               <ActivityIndicator color="#fff" size="small" />
-              <Text style={[styles.continueText, { marginLeft: 8 }]}>Verifying…</Text>
+              <Text style={[styles.continueText, { marginLeft: 8 }]}>{t('verification.verifying') ?? 'Verifying…'}</Text>
             </View>
           ) : (
             <View style={styles.verifyingRow}>
               <ShieldCheck color="#fff" size={18} />
-              <Text style={[styles.continueText, { marginLeft: 8 }]}>Verify & Continue</Text>
+              <Text style={[styles.continueText, { marginLeft: 8 }]}>{t('verification.verifyContinue') ?? 'Verify & Continue'}</Text>
             </View>
           )}
         </TouchableOpacity>
 
         {Platform.OS === 'web' ? (
-          <Text style={styles.webHint} testID="web-hint">Tip: On web, your browser may open a file dialog. Use your device camera if prompted.</Text>
+          <Text style={styles.webHint} testID="web-hint">{t('verification.webHint') ?? 'Tip: On web, your browser may open a file dialog. Use your device camera if prompted.'}</Text>
         ) : null}
       </View>
+
+      <Modal visible={showCamera} animationType="slide" onRequestClose={() => setShowCamera(false)}>
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowCamera(false)} style={styles.closeBtn} testID="close-camera">
+              <XCircle color="#333" size={24} />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>{exprInstruction}</Text>
+            <View style={{ width: 44 }} />
+          </View>
+          <View style={styles.cameraWrap}>
+            <CameraView
+              ref={(r) => { cameraRef.current = r; }}
+              style={styles.camera}
+              facing={'front'}
+            />
+          </View>
+          <View style={styles.cameraHelp}> 
+            <Webcam color="#6B7280" size={16} />
+            <Text style={styles.cameraHelpText}>{t('verification.autoCaptureHint') ?? 'Hold steady. We will capture automatically in 2 seconds or tap Capture.'}</Text>
+          </View>
+          <View style={{ padding: 12, backgroundColor: '#fff' }}>
+            <TouchableOpacity style={styles.snapBtn} onPress={takeNowExpr} testID="snap-now">
+              <Camera color="#fff" size={18} />
+              <Text style={styles.snapText}>{t('verification.captureNow') ?? 'Capture now'}</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -574,17 +474,14 @@ const styles = StyleSheet.create({
   errorBanner: { marginTop: 12, backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: 1, padding: 10, borderRadius: 10, flexDirection: 'row', alignItems: 'center' },
   errorText: { color: '#991b1b', marginLeft: 8, fontSize: 12 },
   verifyingRow: { flexDirection: 'row', alignItems: 'center' },
-  compareRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
-  compareButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: '#FFF4F4', borderRadius: 999, borderWidth: 1, borderColor: '#FFE1E1' },
-  compareText: { color: '#FF6B6B', fontSize: 12, fontWeight: '700' },
-  compareHint: { marginLeft: 10, color: '#666', fontSize: 12 },
-  modeBar: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
-  modeText: { color: '#6B7280', fontSize: 12 },
-  modePicker: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  modeItem: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 16, backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB' },
-  modeItemActive: { backgroundColor: '#D1FAE5', borderColor: '#6EE7B7' },
-  itemDisabled: { opacity: 0.5 },
-  textDisabled: { color: '#9CA3AF' },
-  modeTextOption: { fontSize: 13, color: '#374151', fontWeight: '600' },
-  modeTextActive: { color: '#065F46' },
+  modalContainer: { flex: 1, backgroundColor: '#000' },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff' },
+  closeBtn: { padding: 6 },
+  modalTitle: { fontSize: 14, color: '#333', fontWeight: '600', flexShrink: 1 },
+  cameraWrap: { flex: 1, backgroundColor: '#000' },
+  camera: { flex: 1 },
+  cameraHelp: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, backgroundColor: '#fff' },
+  cameraHelpText: { color: '#6B7280', fontSize: 12, flex: 1 },
+  snapBtn: { backgroundColor: '#FF6B6B', borderRadius: 12, paddingVertical: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 },
+  snapText: { color: '#fff', fontSize: 16, fontWeight: '700', marginLeft: 8 },
 });

@@ -16,7 +16,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Heart, X, Filter, Star, MessageCircle, Verified, Sparkles, MapPin, Shield, Moon, Sun, Sparkle } from 'lucide-react-native';
+import { Heart, X, Filter, Star, MessageCircle, Verified, Sparkles, MapPin, Shield, Moon, Sun, Sparkle, Eye } from 'lucide-react-native';
 import { mockProfiles, type MockProfile } from '@/mocks/profiles';
 import { router } from 'expo-router';
 import MatchCelebration from '@/components/MatchCelebration';
@@ -46,6 +46,7 @@ interface HexProfileCardProps {
   aiScore?: number;
   onLike: (profile: MockProfile) => void;
   onPass: (profile: MockProfile) => void;
+  onPressCard: (profile: MockProfile) => void;
   size: number;
   translatedBio?: string;
   translatedInterests?: string[];
@@ -75,6 +76,7 @@ interface HexGridRowProps {
   aiScores: Record<string, number>;
   onLike: (profile: MockProfile) => void;
   onPass: (profile: MockProfile) => void;
+  onPressCard: (profile: MockProfile) => void;
   hexSize: number;
   tMap: Record<string, { bio?: string; interests?: string[]; bioTranslated: boolean; interestsTranslated: boolean }>;
   tEnabled: boolean;
@@ -87,6 +89,7 @@ const HexProfileCard: React.FC<HexProfileCardProps> = ({
   aiScore,
   onLike,
   onPass,
+  onPressCard,
   size,
   translatedBio,
   translatedInterests,
@@ -201,9 +204,13 @@ const HexProfileCard: React.FC<HexProfileCardProps> = ({
   }, [isProcessing, animateButtonPress, passButtonScale, onPass, profile]);
 
   const handleCardPress = useCallback(() => {
-    animateCardPress();
-    router.push(`/profile/${profile.id}` as any);
-  }, [animateCardPress, profile.id]);
+    try {
+      animateCardPress();
+      onPressCard(profile);
+    } catch (e) {
+      console.log('[Gallery] card press error', e);
+    }
+  }, [animateCardPress, onPressCard, profile]);
 
   // Create hexagon path
   const hexPath = `M${size * 0.5},${size * 0.067} L${size * 0.933},${size * 0.25} L${size * 0.933},${size * 0.75} L${size * 0.5},${size * 0.933} L${size * 0.067},${size * 0.75} L${size * 0.067},${size * 0.25} Z`;
@@ -360,6 +367,7 @@ const HexGridRow: React.FC<HexGridRowProps> = ({
   aiScores,
   onLike,
   onPass,
+  onPressCard,
   hexSize,
   tMap,
   tEnabled,
@@ -382,6 +390,7 @@ const HexGridRow: React.FC<HexGridRowProps> = ({
             aiScore={aiScores[profile.id]}
             onLike={onLike}
             onPass={onPass}
+            onPressCard={onPressCard}
             size={hexSize}
             translatedBio={tEnabled && t?.bio ? t.bio : undefined}
             translatedInterests={tEnabled && t?.interests ? t.interests : undefined}
@@ -420,6 +429,8 @@ export default function GalleryScreen() {
   const [animationsEnabled, setAnimationsEnabled] = useState<boolean>(true);
   const [showUpgrade, setShowUpgrade] = useState<boolean>(false);
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
+  const [previewMode, setPreviewMode] = useState<boolean>(false);
+  const [previewProfile, setPreviewProfile] = useState<MockProfile | null>(null);
   
   const { addMatch } = useMatches();
   const analytics = useAnalytics();
@@ -638,6 +649,25 @@ export default function GalleryScreen() {
     setCelebration({ visible: true, intensity, theme, message: msg });
     setTimeout(() => setCelebration(c => ({ ...c, visible: false })), 2000 + Math.floor(800 * intensity));
   };
+
+  const onPressCardGuarded = useCallback((profile: MockProfile) => {
+    try {
+      const isMatched = Boolean((useMatches as any) && false);
+      if (previewMode) {
+        setPreviewProfile(profile);
+        return;
+      }
+      const matchesCtx = undefined;
+      const isActuallyMatched = false;
+      if (isActuallyMatched) {
+        router.push(`/chat/${profile.id}` as any);
+        return;
+      }
+      console.log('[Gallery] blocked navigation to non-existent details, enable preview to see profile');
+    } catch (e) {
+      console.log('[Gallery] onPressCardGuarded error', e);
+    }
+  }, [previewMode]);
   
   const handleLike = useCallback(async (profile: MockProfile) => {
     if (!canSwipe) {
@@ -761,6 +791,7 @@ export default function GalleryScreen() {
         aiScores={aiScoresMap}
         onLike={handleLike}
         onPass={handlePass}
+        onPressCard={onPressCardGuarded}
         hexSize={hexSize}
         tMap={tMap}
         tEnabled={tEnabled}
@@ -813,12 +844,35 @@ export default function GalleryScreen() {
             <Filter size={20} color="#6B7280" />
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filterButton, { marginLeft: 8 }]
-            }
+            style={[styles.filterButton, { marginLeft: 8 }]}
             onPress={() => setDarkMode(v => !v)}
             testID="toggle-dark"
           >
             {darkMode ? <Sun size={18} color="#F59E0B" /> : <Moon size={18} color="#111827" />}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterButton, { marginLeft: 8, backgroundColor: previewMode ? '#DCFCE7' : '#F3F4F6', borderWidth: previewMode ? 1 : 0, borderColor: previewMode ? '#86EFAC' : 'transparent' }]}
+            onPress={() => setPreviewMode(v => !v)}
+            testID="toggle-preview"
+          >
+            <Eye size={18} color={previewMode ? '#16A34A' : '#111827'} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterButton, { marginLeft: 8 }]}
+            onPress={() => {
+              try {
+                const p = displayedProfiles[0];
+                if (!p) return;
+                const score = aiScoresMap[p.id] ?? p.aiCompatibilityScore ?? 90;
+                setMatchModal({ visible: true, profile: p });
+                openCelebration(Math.max(85, score), p.name);
+              } catch (e) {
+                console.log('[Gallery] test match trigger error', e);
+              }
+            }}
+            testID="btn-test-match"
+          >
+            <Sparkles size={18} color="#DC2626" />
           </TouchableOpacity>
         </View>
       </View>
@@ -997,6 +1051,51 @@ export default function GalleryScreen() {
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* Profile Preview Modal (Route Guard Fallback) */}
+      <Modal
+        visible={previewProfile != null}
+        animationType="slide"
+        onRequestClose={() => setPreviewProfile(null)}
+      >
+        <SafeAreaView style={styles.filterModal}>
+          <View style={styles.filterHeader}>
+            <Text style={styles.filterTitle}>Profile preview</Text>
+            <TouchableOpacity onPress={() => setPreviewProfile(null)} testID="close-preview">
+              <X size={24} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+          {previewProfile ? (
+            <View style={{ padding: 20 }}>
+              <Image source={{ uri: previewProfile.image }} style={{ width: '100%', height: 240, borderRadius: 16 }} />
+              <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827', marginTop: 12 }}>
+                {previewProfile.name}, {previewProfile.age}
+              </Text>
+              <Text style={{ marginTop: 8, color: '#374151', lineHeight: 20 }}>{previewProfile.bio}</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+                {previewProfile.interests.map((i) => (
+                  <View key={i} style={{ backgroundColor: '#F3F4F6', borderColor: '#E5E7EB', borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 9999 }}>
+                    <Text style={{ color: '#374151', fontWeight: '600', fontSize: 12 }}>{i}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+                <TouchableOpacity style={[styles.ctaButton, styles.keepSwipingButton, { flex: 1 }]} onPress={() => setPreviewProfile(null)}>
+                  <Text style={styles.ctaText}>Close</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.ctaButton, styles.chatButton, { flex: 1 }]} onPress={() => {
+                  setPreviewProfile(null);
+                  setMatchModal({ visible: true, profile: previewProfile });
+                  openCelebration(90, previewProfile.name);
+                }} testID="preview-like">
+                  <Heart size={18} color="#fff" fill="#fff" />
+                  <Text style={[styles.ctaText, { color: '#fff', marginLeft: 8 }]}>Like</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null}
+        </SafeAreaView>
       </Modal>
       
       {/* Match Celebration */}

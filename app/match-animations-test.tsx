@@ -72,6 +72,13 @@ export default function MatchAnimationsTest() {
     return tiny;
   }, [config.aiScore]);
 
+  const lottieUrl = useMemo(() => {
+    if (Platform.OS === 'web') return undefined;
+    if (config.aiScore >= 90) return 'https://assets9.lottiefiles.com/packages/lf20_xldzoar2.json';
+    if (config.aiScore >= 75) return 'https://assets9.lottiefiles.com/packages/lf20_q5pk6p1k.json';
+    return undefined;
+  }, [config.aiScore]);
+
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -280,6 +287,21 @@ export default function MatchAnimationsTest() {
             <Text style={styles.runBtnText}>Run</Text>
           </TouchableOpacity>
           <TouchableOpacity
+            style={[styles.runBtn, { backgroundColor: '#111827' }]}
+            onPress={() => {
+              const picked = mockProfiles[0];
+              setConfig((c) => ({ ...c, profile: picked, aiScore: 96, simulateMutual: true }));
+              setVisible(false);
+              setTimeout(() => setVisible(true), 16);
+              addLog('Lottie burst triggered (96%)');
+            }}
+            accessibilityRole="button"
+            testID="btn-lottie-burst"
+          >
+            <Sparkles size={16} color="#fff" />
+            <Text style={styles.runBtnText}>Lottie Burst</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.runBtn, { backgroundColor: '#EF4444' }]}
             onPress={() => {
               runningRef.current = false;
@@ -337,6 +359,8 @@ export default function MatchAnimationsTest() {
         soundEnabled
         vibrate
         gifUrl={gifUrl}
+        lottieUrl={lottieUrl}
+        burstMode="auto"
         soundBoomUrl={'https://cdn.freesound.org/previews/235/235968_3984679-lq.wav'}
         soundPopUrl={'https://cdn.freesound.org/previews/341/341695_6262555-lq.wav'}
       />

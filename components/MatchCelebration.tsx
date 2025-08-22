@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Dimensions, Easing, Platform, StyleSheet, Text, View, Image } from 'react-native';
 import { PROMO_GRAPHICS } from '@/constants/promoGraphics';
 import * as Haptics from 'expo-haptics';
+import type { ComponentType } from 'react';
 
 export type CelebrationTheme = 'confetti' | 'hearts' | 'fireworks';
 
@@ -18,6 +19,7 @@ export interface MatchCelebrationProps {
   gifUrl?: string;
   soundBoomUrl?: string;
   soundPopUrl?: string;
+  burstMode?: 'auto' | 'gif' | 'lottie';
 }
 
 interface Particle {
@@ -39,7 +41,7 @@ const SOUND_POP_MP3 = 'https://www.soundjay.com/misc/sounds/bell-ringing-04.wav'
 const SOUND_BOOM_WAV_FALLBACK = 'https://cdn.freesound.org/previews/316/316847_5123451-lq.wav';
 const SOUND_POP_WAV_FALLBACK = 'https://cdn.freesound.org/previews/341/341695_6262555-lq.wav';
 
-const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, intensity = 1, theme = 'fireworks', message = "It's a Match!", volume = 0.9, soundEnabled = true, vibrate = true, lottieUrl, gifUrl, soundBoomUrl, soundPopUrl }) => {
+const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, intensity = 1, theme = 'fireworks', message = "It's a Match!", volume = 0.9, soundEnabled = true, vibrate = true, lottieUrl, gifUrl, soundBoomUrl, soundPopUrl, burstMode = 'auto' }) => {
   const clampedIntensity = Math.max(0.05, Math.min(1, intensity));
   const count = Math.max(24, Math.floor(140 * clampedIntensity));
   const duration = 900 + Math.floor(1300 * clampedIntensity);
@@ -147,6 +149,7 @@ const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, in
                 try {
                   const created = await Audio.Sound.createAsync({ uri }, initialStatus);
                   boom = created.sound;
+                  try { await (boom as any).setVolumeAsync?.(Math.max(0.1, Math.min(1, volume))); } catch {}
                   break;
                 } catch (e) {
                   lastErr = e;
@@ -171,6 +174,7 @@ const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, in
                       try {
                         const created = await Audio.Sound.createAsync({ uri }, { volume: Math.max(0.1, Math.min(1, volume * 0.8)), shouldPlay: true });
                         pop = created.sound;
+                        try { await (pop as any).setVolumeAsync?.(Math.max(0.1, Math.min(1, volume * 0.8))); } catch {}
                         break;
                       } catch (e) {
                         lastErrPop = e;
@@ -259,6 +263,23 @@ const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, in
   const burstWidth = W * Math.min(1, 0.85 + clampedIntensity * 0.7);
   const burstHeight = 360 + Math.floor(120 * clampedIntensity);
 
+  const shouldUseLottie = ((): boolean => {
+    if (!lottieUrl) return false;
+    if (burstMode === 'lottie') return true;
+    if (burstMode === 'gif') return false;
+    return clampedIntensity >= 0.8;
+  })();
+
+  let LottieViewNative: ComponentType<any> | null = null;
+  if (shouldUseLottie && Platform.OS !== 'web') {
+    try {
+      LottieViewNative = require('lottie-react-native').default as ComponentType<any>;
+    } catch (e) {
+      console.log('[MatchCelebration] lottie-react-native not available', e);
+      LottieViewNative = null;
+    }
+  }
+
   return (
     <View
       pointerEvents="auto"
@@ -270,7 +291,26 @@ const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, in
       <Animated.View style={[styles.flash, { opacity: flashOpacity }]} />
       <Animated.View style={[styles.ring, { top: H / 2 - 40, left: W / 2 - 40, transform: [{ scale: ringScale }], opacity: ringOpacity }]} />
 
-      {gifOverlay ? (
+      {shouldUseLottie ? (
+        Platform.OS === 'web' ? (
+          React.createElement(require('@lottiefiles/dotlottie-react').DotLottiePlayer, {
+            src: lottieUrl,
+            autoplay: true,
+            loop: false,
+            style: { position: 'absolute', top: H / 2 - burstHeight / 2, width: burstWidth, height: burstHeight },
+            'data-testid': 'lottie-fireworks-web',
+          })
+        ) : (
+          LottieViewNative ? (
+            React.createElement(LottieViewNative, {
+              source: { uri: lottieUrl },
+              autoPlay: true,
+              loop: false,
+              style: [styles.lottieNative, { top: H / 2 - burstHeight / 2, width: burstWidth, height: burstHeight }],
+            })
+          ) : null
+        )
+      ) : gifOverlay ? (
         <Image source={{ uri: gifOverlay }} style={{ position: 'absolute', top: H / 2 - burstHeight / 2, width: burstWidth, height: burstHeight }} testID={Platform.OS === 'web' ? 'gif-fireworks-web' : 'gif-fireworks'} />
       ) : null}
 
@@ -374,6 +414,7 @@ const styles = StyleSheet.create({
   title: { color: '#fff', fontSize: 20, fontWeight: '900', textAlign: 'center' },
   celebrationImage: { width: 40, height: 40, marginBottom: 8, opacity: 0.8 },
   lottieBurst: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  lottieNative: { position: 'absolute' },
   flash: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#ffffff' },
   ring: { position: 'absolute', width: 80, height: 80, borderRadius: 40, borderWidth: 3, borderColor: 'rgba(255,255,255,0.9)' },
 });

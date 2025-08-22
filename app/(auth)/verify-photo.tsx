@@ -12,6 +12,8 @@ import PrivacyNote from '@/components/PrivacyNote';
 import { useMembership } from '@/contexts/MembershipContext';
 import { backend, VerificationModePref, CaptureChoice } from '@/lib/backend';
 import { useAuth } from '@/contexts/AuthContext';
+import { useI18n } from '@/contexts/I18nContext';
+import { useToast } from '@/contexts/ToastContext';
 
 type PoseKey = 'front' | 'left' | 'right';
 
@@ -33,6 +35,8 @@ export default function VerifyPhotoScreen() {
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const verificationStartedAtRef = useRef<number>(Date.now());
   const { user } = useAuth();
+  const { t } = useI18n();
+  const { show: showToast } = useToast();
   const uid = user?.email ?? 'guest';
   const [verificationMode, setVerificationMode] = useState<VerificationModePrefConst>('auto');
   const [captureChoice, setCaptureChoice] = useState<CaptureChoiceConst>('static');
@@ -116,10 +120,10 @@ export default function VerifyPhotoScreen() {
   }, []);
 
   const instruction = useMemo(() => {
-    if (currentPose === 'front') return 'Center your face and take a front-facing selfie';
-    if (currentPose === 'left') return 'Turn your head to your LEFT and keep shoulders visible';
-    return 'Turn your head to your RIGHT and keep shoulders visible';
-  }, [currentPose]);
+    if (currentPose === 'front') return t('verification.instructionFront') ?? 'Center your face and take a front-facing selfie';
+    if (currentPose === 'left') return t('verification.instructionLeft') ?? 'Turn your head to your LEFT and keep shoulders visible';
+    return t('verification.instructionRight') ?? 'Turn your head to your RIGHT and keep shoulders visible';
+  }, [currentPose, t]);
 
   const effectiveCapture: CaptureChoiceConst = useMemo(() => getEffectiveCapture(verificationMode, captureChoice), [verificationMode, captureChoice]);
 
@@ -151,7 +155,10 @@ export default function VerifyPhotoScreen() {
 
       const single = await verifySingleImage(asset.uri);
       if (!single.ok) {
-        Alert.alert('Face required', single.reason ?? 'Exactly one face must be visible.');
+        const errorMsg = t('verification.faceRequired') ?? 'Face required';
+        const errorDetail = single.reason ?? t('verification.oneFaceRequired') ?? 'Exactly one face must be visible.';
+        Alert.alert(errorMsg, errorDetail);
+        showToast(errorDetail);
         return;
       }
 
@@ -175,7 +182,10 @@ export default function VerifyPhotoScreen() {
       else if (currentPose === 'left') setCurrentPose('right');
     } catch (e) {
       console.log('[VerifyPhoto] capture error', e);
-      Alert.alert('Camera error', 'Unable to open camera. Try again.');
+      const errorMsg = t('verification.cameraError') ?? 'Camera error';
+      const errorDetail = t('verification.cameraErrorDetail') ?? 'Unable to open camera. Try again.';
+      Alert.alert(errorMsg, errorDetail);
+      showToast(errorDetail);
     }
   }, [currentPose, requestPermissions, effectiveCapture]);
 
@@ -192,16 +202,16 @@ export default function VerifyPhotoScreen() {
 
       const distinctUris = new Set([pFront.uri, pLeft.uri, pRight.uri]);
       if (distinctUris.size < 3) {
-        return { ok: false, reason: 'Duplicate images detected. Please retake different angles.' };
+        return { ok: false, reason: t('verification.duplicateImages') ?? 'Duplicate images detected. Please retake different angles.' };
       }
 
       if (!(pFront.capturedAt < pLeft.capturedAt && pLeft.capturedAt < pRight.capturedAt)) {
-        return { ok: false, reason: 'Photos must be captured in order: Front, then Left, then Right.' };
+        return { ok: false, reason: t('verification.wrongOrder') ?? 'Photos must be captured in order: Front, then Left, then Right.' };
       }
 
       const elapsed = Date.now() - verificationStartedAtRef.current;
       if (elapsed > 2 * 60 * 1000 + 15 * 1000) {
-        return { ok: false, reason: 'Capture window expired. Please retry within 2 minutes.' };
+        return { ok: false, reason: t('verification.timeExpired') ?? 'Capture window expired. Please retry within 2 minutes.' };
       }
 
       const sizes = [pFront.byteSize ?? 0, pLeft.byteSize ?? 0, pRight.byteSize ?? 0];
@@ -209,7 +219,7 @@ export default function VerifyPhotoScreen() {
       const variance = sizes.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / sizes.length;
       if (tier !== 'plus') {
         if (isFinite(variance) && avg > 0 && variance > Math.pow(avg * 0.9, 2)) {
-          return { ok: false, reason: 'Inconsistent image data detected. Please retake in the same lighting.' };
+          return { ok: false, reason: t('verification.inconsistentLighting') ?? 'Inconsistent image data detected. Please retake in the same lighting.' };
         }
       }
 
@@ -221,13 +231,13 @@ export default function VerifyPhotoScreen() {
 
       const external = await runFaceVerification({ front: pFront, left: pLeft, right: pRight });
       if (!external.ok) {
-        return { ok: false, reason: external.reason ?? 'Face verification failed.' };
+        return { ok: false, reason: external.reason ?? t('verification.verificationFailed') ?? 'Face verification failed.' };
       }
       const vec = faceVectorFromDetails(external.details ?? null);
       return { ok: true, score: external.score, faceVector: vec };
     } catch (e) {
       console.log('[VerifyPhoto] verify error', e);
-      return { ok: false, reason: 'Unexpected verification error.' };
+      return { ok: false, reason: t('verification.unexpectedError') ?? 'Unexpected verification error.' };
     } finally {
       setVerifying(false);
     }
@@ -235,25 +245,25 @@ export default function VerifyPhotoScreen() {
 
   const proceed = useCallback(async () => {
     if (!allReady) {
-      Alert.alert(
-        'Incomplete Verification',
-        'Please capture all three photos (front, left, right) to continue with verification.',
-        [{ text: 'OK' }]
-      );
+      const title = t('verification.incompleteTitle') ?? 'Incomplete Verification';
+      const message = t('verification.incompleteMessage') ?? 'Please capture all three photos (front, left, right) to continue with verification.';
+      Alert.alert(title, message, [{ text: t('common.ok') ?? 'OK' }]);
+      showToast(message);
       return;
     }
 
     const result = await verifyPhotos();
     if (!result.ok) {
-      const baseMsg = result.reason ?? 'Verification failed. Please try again.';
-      const friendly = `Verification failed: ${baseMsg}`;
+      const baseMsg = result.reason ?? t('verification.verificationFailedGeneric') ?? 'Verification failed. Please try again.';
+      const friendly = `${t('verification.verificationFailed') ?? 'Verification failed'}: ${baseMsg}`;
       setVerificationError(friendly);
+      showToast(baseMsg);
       Alert.alert(
-        'Verification Failed',
+        t('verification.verificationFailed') ?? 'Verification Failed',
         friendly,
         [
-          { text: 'Retry with remaining time', onPress: () => setVerificationError(null) },
-          { text: 'Restart 2‑min timer', style: 'destructive', onPress: resetAll },
+          { text: t('verification.retryRemaining') ?? 'Retry with remaining time', onPress: () => setVerificationError(null) },
+          { text: t('verification.restartTimer') ?? 'Restart 2‑min timer', style: 'destructive', onPress: resetAll },
         ]
       );
       return;
@@ -274,19 +284,30 @@ export default function VerifyPhotoScreen() {
       const signupDataStr = await AsyncStorage.getItem('signup:basic');
       if (signupDataStr) {
         const signupData = JSON.parse(signupDataStr);
-        // In a real app, you would send this to your backend
-        console.log('[VerifyPhoto] User verified and ready for account creation:', {
+        // Store complete verification data
+        const verifiedUserData = {
           ...signupData,
           verificationScore: result.score,
-          verificationTimestamp: Date.now()
-        });
+          verificationTimestamp: Date.now(),
+          faceVector: result.faceVector,
+          isVerified: true
+        };
+        
+        await AsyncStorage.setItem('verified_user_data', JSON.stringify(verifiedUserData));
+        
+        // In a real app, you would send this to your backend
+        console.log('[VerifyPhoto] User verified and ready for account creation:', verifiedUserData);
+        
+        showToast(t('verification.verificationSuccess') ?? 'Verification successful!');
       }
       
       // Navigate to profile setup
       router.push('/(auth)/profile-setup' as any);
     } catch (e) {
       console.log('[VerifyPhoto] persist photos error', e);
-      Alert.alert('Error', 'Failed to save verification data. Please try again.');
+      const errorMsg = t('verification.saveError') ?? 'Failed to save verification data. Please try again.';
+      Alert.alert(t('common.error') ?? 'Error', errorMsg);
+      showToast(errorMsg);
     }
   }, [allReady, photos, resetAll, verifyPhotos]);
 

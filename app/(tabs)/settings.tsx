@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { Languages, ToggleLeft, ToggleRight, Crown, WifiOff, RefreshCw, CalendarX2, CreditCard, Globe, Webcam, Image as ImageIcon, Shuffle, Sparkles } from 'lucide-react-native';
+import { Languages, ToggleLeft, ToggleRight, Crown, WifiOff, RefreshCw, CalendarX2, CreditCard, Globe, Webcam, Image as ImageIcon, Shuffle, Sparkles, Shield, ChevronRight } from 'lucide-react-native';
 import { useTranslate } from '@/contexts/TranslateContext';
 import { supportedLocales, SupportedLocale } from '@/lib/i18n';
 import { useMembership } from '@/contexts/MembershipContext';
@@ -333,6 +333,24 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.card}>
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => {
+            try {
+              router.push('/verify-test');
+            } catch (e) {
+              console.log('[Settings] navigate verify test error', e);
+            }
+          }}
+          testID="verify-test-link"
+        >
+          <View style={styles.rowLeft}>
+            <Shield color="#10B981" size={20} />
+            <Text style={styles.rowTitle}>Verification Test</Text>
+          </View>
+          <ChevronRight color="#9CA3AF" size={20} />
+        </TouchableOpacity>
+        
         <TouchableOpacity
           style={styles.row}
           onPress={() => {

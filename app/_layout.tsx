@@ -42,6 +42,12 @@ const RootLayoutNav = React.memo(function RootLayoutNav() {
           headerShown: false,
         }}
       />
+      <Stack.Screen
+        name="verify-test"
+        options={{
+          headerShown: false,
+        }}
+      />
     </Stack>
   );
 });

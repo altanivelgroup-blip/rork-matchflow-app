@@ -63,7 +63,7 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
   const labelY = useRef(new Animated.Value(20)).current;
 
   const soundRef = useRef<Audio.Sound | null>(null);
-  const [lottieReady, setLottieReady] = useState<boolean>(false);
+  const [lottieData, setLottieData] = useState<object | null>(null);
 
   useEffect(() => {
     return () => {
@@ -80,6 +80,17 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
 
   useEffect(() => {
     if (!visible) return;
+
+    const url = lottieUrl ?? (intensity >= 0.9 ? DEFAULT_FIREWORKS_JSON : ALT_FIREWORKS_JSON);
+    fetch(url)
+      .then((r) => r.json())
+      .then((json) => {
+        setLottieData(json as object);
+      })
+      .catch((e) => {
+        console.log('[MatchCelebration] lottie fetch error', e);
+        setLottieData(null);
+      });
 
     const anims: Animated.CompositeAnimation[] = [];
 
@@ -158,9 +169,56 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
   const scaled = 0.6 + intensity * 0.8;
   const jsonUrl = lottieUrl ?? (intensity >= 0.9 ? DEFAULT_FIREWORKS_JSON : ALT_FIREWORKS_JSON);
 
+  let LottieViewComp: any = null;
+  let ReactLottie: any = null;
+  if (Platform.OS !== 'web') {
+    try {
+      LottieViewComp = require('lottie-react-native').default;
+    } catch {
+      LottieViewComp = null;
+    }
+  } else {
+    try {
+      ReactLottie = require('react-lottie').default;
+    } catch {
+      ReactLottie = null;
+    }
+  }
+
   return (
     <View pointerEvents="none" style={styles.overlay} testID="match-celebration">
-      {null}
+      {Platform.OS !== 'web' && LottieViewComp && lottieData ? (
+        <View style={[styles.lottieBurst, { top: H / 2 - 160 }]}> 
+          <LottieViewComp
+            source={lottieData}
+            autoPlay
+            loop={false}
+            speed={Math.max(0.6, Math.min(2, 0.8 + intensity))}
+            style={{ width: W * Math.min(1, 0.8 + intensity * 0.6), height: 320 }}
+            resizeMode="cover"
+            testID="lottie-fireworks"
+          />
+        </View>
+      ) : null}
+
+      {Platform.OS === 'web' && ReactLottie && lottieData ? (
+        <View style={[styles.lottieBurst, { top: H / 2 - 160 }]}> 
+          <ReactLottie
+            options={{ animationData: lottieData, loop: false, autoplay: true, rendererSettings: { preserveAspectRatio: 'xMidYMid slice' } }}
+            height={320}
+            width={W * Math.min(1, 0.8 + intensity * 0.6)}
+            isStopped={false}
+            isPaused={false}
+          />
+        </View>
+      ) : null}
+
+      {Platform.OS === 'web' && (!ReactLottie || !lottieData) ? (
+        <Image
+          source={{ uri: intensity >= 0.9 ? 'https://media.giphy.com/media/3o7abB06u9bNzA8lu8/giphy.gif' : 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif' }}
+          style={{ position: 'absolute', top: H / 2 - 160, width: W * Math.min(1, 0.7 + intensity * 0.5), height: 320, opacity: 0.9 }}
+        />
+      ) : null}
 
       {particles.map((p, i) => {
         const transform = [{ translateX: p.x }, { translateY: p.y }, { rotate: p.rotate.interpolate({ inputRange: [0, 360], outputRange: ['0deg', '360deg'] }) }, { scale: p.scale }];

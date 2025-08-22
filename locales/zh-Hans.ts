@@ -9,6 +9,11 @@ export default {
     saving: '保存中…',
     or: '或',
   },
+  splash: {
+    tagline: 'AI 智能连接',
+    scanning: '正在扫描人脸…',
+    webHint: '提示：这是演示动画。在原生应用中，加载完成后会自动隐藏。'
+  },
   auth: {
     login: '登录',
     email: '邮箱',

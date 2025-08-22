@@ -9,6 +9,7 @@ export default function AuthLayout() {
       <Stack.Screen name="verify-photo" />
       <Stack.Screen name="profile-setup" />
       <Stack.Screen name="questionnaire" options={{ headerShown: true, title: 'Profile Questionnaire' }} />
+      <Stack.Screen name="splash-test" options={{ headerShown: true, title: 'Splash Test' }} />
     </Stack>
   );
 }

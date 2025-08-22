@@ -1,11 +1,13 @@
-import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, Image, Text } from 'react-native';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { View, StyleSheet, Animated, Image, Text, Platform } from 'react-native';
+import { useI18n } from '@/contexts/I18nContext';
 
 interface SplashScreenProps {
   onAnimationComplete?: () => void;
 }
 
 export default function SplashScreen({ onAnimationComplete }: SplashScreenProps) {
+  const { t } = useI18n();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const scanLineAnim = useRef(new Animated.Value(0)).current;
@@ -13,6 +15,7 @@ export default function SplashScreen({ onAnimationComplete }: SplashScreenProps)
 
   useEffect(() => {
     const startAnimation = () => {
+      console.log('[SplashScreen] startAnimation');
       Animated.sequence([
         Animated.parallel([
           Animated.timing(fadeAnim, {
@@ -46,7 +49,7 @@ export default function SplashScreen({ onAnimationComplete }: SplashScreenProps)
           Animated.loop(
             Animated.sequence([
               Animated.timing(pulseAnim, {
-                toValue: 1.1,
+                toValue: 1.08,
                 duration: 1000,
                 useNativeDriver: true,
               }),
@@ -61,10 +64,11 @@ export default function SplashScreen({ onAnimationComplete }: SplashScreenProps)
         ]),
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 500,
+          duration: 450,
           useNativeDriver: true,
         }),
-      ]).start(() => {
+      ]).start(({ finished }) => {
+        console.log('[SplashScreen] animation finished', finished);
         onAnimationComplete?.();
       });
     };
@@ -72,13 +76,13 @@ export default function SplashScreen({ onAnimationComplete }: SplashScreenProps)
     startAnimation();
   }, [fadeAnim, scaleAnim, scanLineAnim, pulseAnim, onAnimationComplete]);
 
-  const scanLineTranslateY = scanLineAnim.interpolate({
+  const scanLineTranslateY = useMemo(() => scanLineAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [-100, 100],
-  });
+  }), [scanLineAnim]);
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="splash-container" accessibilityLabel="splash-container">
       <Animated.View
         style={[
           styles.logoContainer,
@@ -90,14 +94,16 @@ export default function SplashScreen({ onAnimationComplete }: SplashScreenProps)
             ],
           },
         ]}
+        testID="splash-logo-container"
+        accessibilityLabel="splash-logo-container"
       >
         <Image
           source={{ uri: 'https://r2-pub.rork.com/generated-images/295c751b-386b-4efe-8904-f8d86c28253a.png' }}
           style={styles.logo}
           resizeMode="contain"
+          accessibilityIgnoresInvertColors
         />
-        
-        <View style={styles.scanFrame}>
+        <View style={styles.scanFrame} testID="splash-scan-frame">
           <Animated.View
             style={[
               styles.scanLine,
@@ -105,9 +111,9 @@ export default function SplashScreen({ onAnimationComplete }: SplashScreenProps)
                 transform: [{ translateY: scanLineTranslateY }],
               },
             ]}
+            testID="splash-scan-line"
           />
         </View>
-        
         <View style={styles.corners}>
           <View style={[styles.corner, styles.topLeft]} />
           <View style={[styles.corner, styles.topRight]} />
@@ -115,11 +121,18 @@ export default function SplashScreen({ onAnimationComplete }: SplashScreenProps)
           <View style={[styles.corner, styles.bottomRight]} />
         </View>
       </Animated.View>
-      
-      <Animated.View style={[styles.textContainer, { opacity: fadeAnim }]}>
-        <Text style={styles.appName}>MatchFlow</Text>
-        <Text style={styles.tagline}>AI-Powered Connections</Text>
+
+      <Animated.View style={[styles.textContainer, { opacity: fadeAnim }]} testID="splash-text">
+        <Text style={styles.appName}>{t('common.appName')}</Text>
+        <Text style={styles.tagline}>{t('splash.tagline')}</Text>
+        <Text style={styles.loadingText}>{t('splash.scanning')}</Text>
       </Animated.View>
+
+      {Platform.OS === 'web' ? (
+        <View style={styles.webHint} testID="splash-web-hint">
+          <Text style={styles.webHintText}>{t('splash.webHint') ?? ''}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -133,8 +146,8 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     position: 'relative',
-    width: 200,
-    height: 200,
+    width: 220,
+    height: 220,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -144,8 +157,8 @@ const styles = StyleSheet.create({
   },
   scanFrame: {
     position: 'absolute',
-    width: 180,
-    height: 180,
+    width: 190,
+    height: 190,
     borderWidth: 2,
     borderColor: 'transparent',
     overflow: 'hidden',
@@ -162,13 +175,13 @@ const styles = StyleSheet.create({
   },
   corners: {
     position: 'absolute',
-    width: 180,
-    height: 180,
+    width: 190,
+    height: 190,
   },
   corner: {
     position: 'absolute',
-    width: 20,
-    height: 20,
+    width: 22,
+    height: 22,
     borderColor: '#9C27B0',
     borderWidth: 3,
   },
@@ -197,18 +210,37 @@ const styles = StyleSheet.create({
     borderTopWidth: 0,
   },
   textContainer: {
-    marginTop: 40,
+    marginTop: 36,
     alignItems: 'center',
   },
   appName: {
     fontSize: 32,
-    fontWeight: 'bold',
+    fontWeight: 'bold' as const,
     color: '#E91E63',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   tagline: {
     fontSize: 16,
     color: '#666',
-    fontWeight: '500',
+    fontWeight: '600' as const,
+    marginBottom: 6,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#9C27B0',
+  },
+  webHint: {
+    position: 'absolute',
+    bottom: 24,
+    left: 24,
+    right: 24,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#f7f2fa',
+  },
+  webHintText: {
+    textAlign: 'center' as const,
+    color: '#6a1b9a',
+    fontSize: 12,
   },
 });

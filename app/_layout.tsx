@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { View, StyleSheet } from "react-native";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { MatchProvider } from "@/contexts/MatchContext";
 import { MediaProvider } from "@/contexts/MediaContext";
@@ -15,6 +16,7 @@ import { DreamDateProvider } from "@/contexts/DreamDateContext";
 import { NotificationsProvider } from "@/contexts/NotificationsContext";
 import { AnalyticsProvider } from "@/contexts/AnalyticsContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import AppSplashScreen from "@/components/SplashScreen";
 
 const RootLayoutNav = React.memo(function RootLayoutNav() {
   return (
@@ -50,21 +52,34 @@ const RootLayoutNav = React.memo(function RootLayoutNav() {
           headerShown: false,
         }}
       />
+      <Stack.Screen
+        name="splash-test"
+        options={{
+          title: "Splash Test",
+        }}
+      />
     </Stack>
   );
 });
 
 export default function RootLayout() {
   const [queryClient] = useState<QueryClient>(() => new QueryClient());
+  const [showSplash, setShowSplash] = useState<boolean>(true);
 
   useEffect(() => {
     (async () => {
       try {
         await SplashScreen.hideAsync();
+        console.log('[RootLayout] expo splash hidden');
       } catch (e) {
         console.log('[RootLayout] splash hide error', e);
       }
     })();
+  }, []);
+
+  const onSplashDone = useMemo(() => () => {
+    console.log('[RootLayout] in-app splash complete');
+    setShowSplash(false);
   }, []);
 
   return (
@@ -82,7 +97,14 @@ export default function RootLayout() {
                           <ErrorBoundary>
                             <AnalyticsProvider>
                               <NotificationsProvider>
-                                <RootLayoutNav />
+                                <View style={styles.appContainer} testID="root-app">
+                                  <RootLayoutNav />
+                                  {showSplash ? (
+                                    <View style={styles.splashOverlay} pointerEvents="none" testID="splash-overlay">
+                                      <AppSplashScreen onAnimationComplete={onSplashDone} />
+                                    </View>
+                                  ) : null}
+                                </View>
                               </NotificationsProvider>
                             </AnalyticsProvider>
                           </ErrorBoundary>
@@ -99,3 +121,16 @@ export default function RootLayout() {
     </QueryClientProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  appContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  splashOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});

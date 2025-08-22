@@ -13,6 +13,11 @@ export default {
     ok: 'OK',
     error: 'Error',
   },
+  splash: {
+    tagline: 'AI‑Powered Connections',
+    scanning: 'Scanning face…',
+    webHint: 'Tip: This is a demo animation. On native apps, the splash hides automatically after loading.'
+  },
   auth: {
     login: 'Login',
     email: 'Email',

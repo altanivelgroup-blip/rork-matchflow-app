@@ -11,6 +11,11 @@ export default {
     language: 'Idioma',
     switchedTo: 'Cambiado a',
   },
+  splash: {
+    tagline: 'Conexiones impulsadas por IA',
+    scanning: 'Escaneando rostro…',
+    webHint: 'Nota: Esta es una animación demo. En apps nativas, el splash se oculta automáticamente al cargar.'
+  },
   auth: {
     login: 'Iniciar sesión',
     email: 'Correo electrónico',

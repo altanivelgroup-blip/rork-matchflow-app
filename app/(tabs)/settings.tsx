@@ -95,6 +95,7 @@ export default function SettingsScreen() {
   const { enabled, setEnabled, targetLang, setTargetLang } = useTranslate();
   const { locale, setLocale } = useI18n();
   const { user } = useAuth();
+  const router = useRouter();
   const uid = user?.email ?? 'guest';
   const entries = useMemo(() => Object.entries(supportedLocales) as [SupportedLocale, string][], []);
   const [expanded, setExpanded] = useState<boolean>(true);

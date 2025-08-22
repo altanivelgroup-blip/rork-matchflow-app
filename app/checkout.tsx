@@ -2,8 +2,10 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Platform } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { ArrowLeft, CheckCircle2, Crown, DollarSign, Globe, ShieldCheck, X } from 'lucide-react-native';
-import { startStripeCheckoutWithOptions } from '@/lib/payments';
+import { startCheckout } from '@/lib/payments';
 import { useMembership } from '@/contexts/MembershipContext';
+import { useI18n } from '@/contexts/I18nContext';
+import { backend, PreferredGateway } from '@/lib/backend';
 
 export default function CheckoutScreen() {
   const router = useRouter();
@@ -12,10 +14,24 @@ export default function CheckoutScreen() {
   const [busy, setBusy] = useState<boolean>(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [success, setSuccess] = useState<boolean>(false);
+  const { t } = useI18n();
+  const [gateway, setGateway] = useState<PreferredGateway>('paypal');
 
   const currency = 'USD';
   const priceCents = 999;
   const price = useMemo(() => (priceCents / 100).toFixed(2), [priceCents]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const s = await backend.fetchUserSettings('guest');
+        if (!cancelled && s?.preferredGateway) setGateway(s.preferredGateway);
+      } catch {}
+    };
+    load();
+    return () => { cancelled = true; };
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -73,7 +89,7 @@ export default function CheckoutScreen() {
               setError(undefined);
               setBusy(true);
               try {
-                const res = await startStripeCheckoutWithOptions({ planId: 'premium_monthly', currency, amountCents: priceCents, promoCode: promo || undefined });
+                const res = await startCheckout({ planId: 'premium_monthly', currency, amountCents: priceCents, promoCode: promo || undefined, gateway, mode: 'subscription' });
                 if (res.success) {
                   await refresh();
                   await setTier('plus');
@@ -82,7 +98,7 @@ export default function CheckoutScreen() {
                     router.back();
                   }, 1200);
                 } else {
-                  setError(res.message ?? 'Payment declined — try another card.');
+                  setError(res.message ?? 'Payment declined — try another method.');
                 }
               } catch (e) {
                 setError('No internet — try again later');
@@ -92,7 +108,7 @@ export default function CheckoutScreen() {
             }}
             testID="checkout-pay"
           >
-            {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.payText}>Confirm Payment</Text>}
+            {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.payText}>Confirm with {gateway === 'paypal' ? 'PayPal' : 'Stripe'}</Text>}
           </TouchableOpacity>
         </View>
 

@@ -48,6 +48,8 @@ export interface QuestionnaireAnswers {
 export type VerificationModePref = 'auto' | 'manual' | 'both';
 export type CaptureChoice = 'live' | 'static';
 
+export type PreferredGateway = 'paypal' | 'stripe';
+
 export interface UserSettings {
   preferredLanguage?: string;
   translateTarget?: string;
@@ -55,6 +57,7 @@ export interface UserSettings {
   verificationMode?: VerificationModePref;
   captureChoice?: CaptureChoice;
   matchAnimationsEnabled?: boolean;
+  preferredGateway?: PreferredGateway;
 }
 
 export interface LikesState {
@@ -204,6 +207,7 @@ export class MockBackend implements BackendAPI {
       verificationMode: current.verificationMode ?? 'auto',
       captureChoice: current.captureChoice ?? 'static',
       matchAnimationsEnabled: typeof current.matchAnimationsEnabled === 'boolean' ? current.matchAnimationsEnabled : true,
+      preferredGateway: (current.preferredGateway as PreferredGateway) ?? 'paypal',
       ...settings,
     };
     await AsyncStorage.setItem(key, JSON.stringify(next));

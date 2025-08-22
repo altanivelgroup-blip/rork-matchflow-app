@@ -1,14 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { Languages, ToggleLeft, ToggleRight, Crown, WifiOff, RefreshCw, CalendarX2, CreditCard, Globe, Webcam, Image as ImageIcon, Shuffle, Sparkles, Shield, ChevronRight } from 'lucide-react-native';
+import { Languages, ToggleLeft, ToggleRight, Crown, WifiOff, RefreshCw, CalendarX2, CreditCard, Globe, Webcam, Image as ImageIcon, Shuffle, Sparkles, Shield, ChevronRight, WalletCards } from 'lucide-react-native';
 import { useTranslate } from '@/contexts/TranslateContext';
 import { supportedLocales, SupportedLocale } from '@/lib/i18n';
 import { useMembership } from '@/contexts/MembershipContext';
 import { openBillingPortal } from '@/lib/payments';
 import { useI18n } from '@/contexts/I18nContext';
 import { showToast } from '@/lib/toast';
-import { backend, VerificationModePref, CaptureChoice } from '@/lib/backend';
+import { backend, VerificationModePref, CaptureChoice, PreferredGateway } from '@/lib/backend';
 import { useAuth } from '@/contexts/AuthContext';
 
 function MembershipSection() {
@@ -104,6 +104,7 @@ export default function SettingsScreen() {
   const [verificationMode, setVerificationMode] = useState<VerificationModePref>('auto');
   const [captureChoice, setCaptureChoice] = useState<CaptureChoice>('static');
   const [matchAnimationsEnabled, setMatchAnimationsEnabled] = useState<boolean>(true);
+  const [preferredGateway, setPreferredGateway] = useState<PreferredGateway>('paypal');
 
   useEffect(() => {
     mountedRef.current = true;
@@ -144,6 +145,9 @@ export default function SettingsScreen() {
         if (typeof s.matchAnimationsEnabled === 'boolean') {
           setMatchAnimationsEnabled(s.matchAnimationsEnabled);
         }
+        if (s.preferredGateway === 'paypal' || s.preferredGateway === 'stripe') {
+          setPreferredGateway(s.preferredGateway);
+        }
         if (s.verificationMode === 'auto' || s.verificationMode === 'manual' || s.verificationMode === 'both') {
           setVerificationMode(s.verificationMode);
         }
@@ -161,14 +165,14 @@ export default function SettingsScreen() {
   useEffect(() => {
     const persist = async () => {
       try {
-        await backend.saveUserSettings(uid, { preferredLanguage: locale, translateTarget: targetLang, translateEnabled: enabled, verificationMode, captureChoice, matchAnimationsEnabled });
+        await backend.saveUserSettings(uid, { preferredLanguage: locale, translateTarget: targetLang, translateEnabled: enabled, verificationMode, captureChoice, matchAnimationsEnabled, preferredGateway });
         console.log('[Settings] saved settings to backend');
       } catch (e) {
         console.log('[Settings] save settings error', e);
       }
     };
     if (mountedRef.current) persist();
-  }, [locale, targetLang, enabled, uid, verificationMode, captureChoice, matchAnimationsEnabled]);
+  }, [locale, targetLang, enabled, uid, verificationMode, captureChoice, matchAnimationsEnabled, preferredGateway]);
 
   return (
     <View style={styles.container}>
@@ -320,6 +324,31 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
         <Text style={{ marginTop: 8, color: '#6B7280', fontSize: 12 }}>Show confetti/hearts when you have a mutual match. Useful to disable for motion sensitivity.</Text>
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.row}>
+          <View style={styles.rowLeft}>
+            <WalletCards color="#111827" size={20} />
+            <Text style={styles.rowTitle}>Payment Gateway</Text>
+          </View>
+        </View>
+        <View style={styles.picker}>
+          {(['paypal','stripe'] as PreferredGateway[]).map(gw => {
+            const active = preferredGateway === gw;
+            return (
+              <TouchableOpacity
+                key={`gw-${gw}`}
+                style={[styles.langItem, active && styles.langItemActive]}
+                onPress={() => setPreferredGateway(gw)}
+                testID={`gateway-${gw}`}
+              >
+                <Text style={[styles.langText, active && styles.langTextActive]}>{gw === 'paypal' ? 'PayPal (Sandbox)' : 'Stripe (Test)'}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <Text style={styles.note}>You can change gateways later. PayPal is default for fastest setup.</Text>
       </View>
 
       <View style={styles.card}>

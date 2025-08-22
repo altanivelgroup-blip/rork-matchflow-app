@@ -21,6 +21,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supportedLocales, type SupportedLocale } from "@/lib/i18n";
 import LanguageSwitchConfirm from '@/components/LanguageSwitchConfirm';
 import { useI18n } from '@/contexts/I18nContext';
+import { useAnalytics } from '@/contexts/AnalyticsContext';
 
 export default function SignupScreen() {
   const [name, setName] = useState<string>("");
@@ -38,6 +39,7 @@ export default function SignupScreen() {
   const { t, locale, setLocale } = useI18n();
 
   const i18nProxy = useMemo(() => ({ t: (k: string) => t(k) }), [t, locale]);
+  const analytics = useAnalytics();
 
   const flagFor = (code: SupportedLocale): string => (code === 'en' ? '🇺🇸' : code === 'es' ? '🇪🇸' : code === 'ja' ? '🇯🇵' : '🇨🇳');
 
@@ -110,6 +112,7 @@ export default function SignupScreen() {
       };
       
       await AsyncStorage.setItem('signup:basic', JSON.stringify(signupData));
+      await analytics.track('sign_up', { locale, age: Number(age), country: locationText || 'unknown' });
       
       // Navigate to photo verification
       router.push("/verify-photo" as any);
@@ -214,7 +217,7 @@ export default function SignupScreen() {
                     <Text style={styles.termsLink}>{(i18nProxy.t('legal.webVersion') ?? 'Web version')}</Text>
                   </TouchableOpacity>
                 </View>
-                <TouchableOpacity style={styles.acceptRow} onPress={() => setAcceptedLegal(!acceptedLegal)} testID="accept-legal">
+                <TouchableOpacity style={styles.acceptRow} onPress={() => { const next = !acceptedLegal; setAcceptedLegal(next); if (next) { analytics.track('legal_accept', { locale }); } }} testID="accept-legal">
                   <View style={[styles.checkbox, acceptedLegal && styles.checkboxChecked]} />
                   <Text style={styles.acceptText}>
                     {i18nProxy.t('legal.acceptText') ?? 'I have read and accept the Terms of Service and Privacy Policy.'}

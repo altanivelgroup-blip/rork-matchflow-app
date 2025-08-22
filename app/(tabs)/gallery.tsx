@@ -23,6 +23,7 @@ import { scoreProfilesAgainstUser } from '@/lib/aiMatch';
 import { useTranslate } from '@/contexts/TranslateContext';
 import { useMembership } from '@/contexts/MembershipContext';
 import UpgradeModal from '@/components/UpgradeModal';
+import { useAnalytics } from '@/contexts/AnalyticsContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { backend } from '@/lib/backend';
 
@@ -160,6 +161,7 @@ export default function GalleryScreen() {
   const [showUpgrade, setShowUpgrade] = useState<boolean>(false);
   
   const { addMatch } = useMatches();
+  const analytics = useAnalytics();
   const { user } = useAuth();
   const { enabled: tEnabled, translate, targetLang } = useTranslate();
   const { limits, canSwipe, swipeState, incSwipe } = useMembership();
@@ -349,6 +351,7 @@ export default function GalleryScreen() {
       
       const uid = user?.email ?? 'guest';
       const res = await backend.recordLike(uid, profile.id);
+      await analytics.track('match_like', { profileId: profile.id, country: profile.location?.city ?? 'unknown' });
       
       const newLiked = new Set(likedIds);
       newLiked.add(profile.id);
@@ -371,6 +374,7 @@ export default function GalleryScreen() {
         }
         
         setMatchModal({ visible: true, profile });
+        await analytics.track('match_mutual', { profileId: profile.id, country: profile.location?.city ?? 'unknown' });
       }
     } catch (e) {
       console.log('[Gallery] like error', e);

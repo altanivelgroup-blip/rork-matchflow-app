@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
+import { useAnalytics } from '@/contexts/AnalyticsContext';
 import { Languages, ToggleLeft, ToggleRight, Crown, WifiOff, RefreshCw, CalendarX2, CreditCard, Globe, Webcam, Image as ImageIcon, Shuffle, Sparkles, Shield, ChevronRight, WalletCards, Bell, FileText } from 'lucide-react-native';
 import { useTranslate } from '@/contexts/TranslateContext';
 import { supportedLocales, SupportedLocale } from '@/lib/i18n';
@@ -11,6 +12,7 @@ import { showToast } from '@/lib/toast';
 import { backend, VerificationModePref, CaptureChoice, PreferredGateway } from '@/lib/backend';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useAnalytics } from '@/contexts/AnalyticsContext';
 
 function MembershipSection() {
   const { tier, setTier, limits, subscription, cancel, restore, refresh } = useMembership();
@@ -98,6 +100,7 @@ export default function SettingsScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const uid = user?.email ?? 'guest';
+  const analytics = useAnalytics();
   const entries = useMemo(() => Object.entries(supportedLocales) as [SupportedLocale, string][], []);
   const [expanded, setExpanded] = useState<boolean>(true);
   const [offline, setOffline] = useState<boolean>(false);
@@ -193,7 +196,7 @@ export default function SettingsScreen() {
             <Bell color="#111827" size={20} />
             <Text style={styles.rowTitle}>Notifications</Text>
           </View>
-          <TouchableOpacity onPress={notif.requestPermission} style={styles.toggle} testID="notif-permission">
+          <TouchableOpacity onPress={async () => { await notif.requestPermission(); await analytics.track('promo_applied', { source: 'settings_notif_permission' }); }} style={styles.toggle} testID="notif-permission">
             {notif.permissionStatus === 'granted' ? <ToggleRight color="#10B981" size={28} /> : <ToggleLeft color="#9CA3AF" size={28} />}
           </TouchableOpacity>
         </View>

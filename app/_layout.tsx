@@ -13,6 +13,7 @@ import { I18nProvider } from "@/contexts/I18nContext";
 import { ToastProvider } from "@/contexts/ToastContext";
 import { DreamDateProvider } from "@/contexts/DreamDateContext";
 import { NotificationsProvider } from "@/contexts/NotificationsContext";
+import { AnalyticsProvider } from "@/contexts/AnalyticsContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 const RootLayoutNav = React.memo(function RootLayoutNav() {
@@ -79,9 +80,11 @@ export default function RootLayout() {
                       <ChatProvider>
                         <ToastProvider>
                           <ErrorBoundary>
-                            <NotificationsProvider>
-                              <RootLayoutNav />
-                            </NotificationsProvider>
+                            <AnalyticsProvider>
+                              <NotificationsProvider>
+                                <RootLayoutNav />
+                              </NotificationsProvider>
+                            </AnalyticsProvider>
                           </ErrorBoundary>
                         </ToastProvider>
                       </ChatProvider>

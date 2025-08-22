@@ -280,31 +280,33 @@ function createWebAudioWithFallback(sources: string[]) {
   audio.preload = 'auto';
   (audio as any).crossOrigin = 'anonymous';
 
-  let chosen: string | null = null;
-  for (const src of sources) {
-    if (!src) continue;
+  const candidates = (sources || []).filter(Boolean) as string[];
+  if (candidates.length === 0) throw new Error('No audio sources provided');
+
+  let index = -1;
+  const pickNextPlayable = (): boolean => {
+    index += 1;
+    if (index >= candidates.length) return false;
+    const src = candidates[index] as string;
     const mime = getMimeFromUrl(src);
     if (!mime || audio.canPlayType(mime)) {
-      chosen = src;
-      break;
+      audio.src = src;
+      audio.load();
+      return true;
     }
-  }
-  if (!chosen && sources.length > 0) chosen = sources[0] as string;
-  if (!chosen) throw new Error('No audio sources provided');
-
-  audio.src = chosen;
+    return pickNextPlayable();
+  };
 
   audio.onerror = () => {
-    const idx = sources.indexOf(chosen as string);
-    if (idx >= 0 && idx < sources.length - 1) {
-      const next = sources[idx + 1] as string;
-      const mime = getMimeFromUrl(next);
-      if (!mime || audio.canPlayType(mime)) {
-        audio.src = next;
-        audio.load();
-      }
+    const advanced = pickNextPlayable();
+    if (!advanced) {
+      audio.onerror = null;
+      console.log('[MatchCelebration] No playable audio source found for', candidates);
     }
   };
+
+  // Initialize with the first playable source
+  pickNextPlayable();
 
   return audio as HTMLAudioElement;
 }

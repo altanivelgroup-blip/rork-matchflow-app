@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Dimensions, Easing, Platform, StyleSheet, Text, View, Image } from 'react-native';
 import { PROMO_GRAPHICS } from '@/constants/promoGraphics';
 import * as Haptics from 'expo-haptics';
@@ -33,8 +33,7 @@ interface Particle {
 
 const { width: W, height: H } = Dimensions.get('window');
 
-const DEFAULT_FIREWORKS_JSON = 'https://assets8.lottiefiles.com/packages/lf20_pzud6sat.json';
-const ALT_FIREWORKS_JSON = 'https://assets8.lottiefiles.com/packages/lf20_kyi6f3u3.json';
+
 const SOUND_BOOM_MP3 = 'https://upload.wikimedia.org/wikipedia/commons/1/17/Explosion1.wav';
 const SOUND_POP_MP3 = 'https://upload.wikimedia.org/wikipedia/commons/3/3f/Small_explosion.wav';
 const SOUND_BOOM_WAV_FALLBACK = 'https://cdn.jsdelivr.net/gh/naptha/tiny-sound@master/sounds/explosion.wav';
@@ -62,7 +61,7 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
       });
     }
     return arr;
-  }, [count, theme, visible]);
+  }, [count, theme]);
 
   const labelOpacity = useRef(new Animated.Value(0)).current;
   const labelY = useRef(new Animated.Value(20)).current;
@@ -140,7 +139,7 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
               }
               const isHuge = clampedIntensity >= 0.9;
               const boomCandidates = [soundBoomUrl, SOUND_BOOM_MP3, SOUND_BOOM_WAV_FALLBACK].filter(Boolean) as string[];
-              const initialStatus = { volume: Math.max(0, Math.min(1, volume)), shouldPlay: true } as const;
+              const initialStatus = { volume: Math.max(0.1, Math.min(1, volume)), shouldPlay: true } as const;
 
               let boom: any = null;
               let lastErr: unknown = null;
@@ -170,7 +169,7 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
                     let lastErrPop: unknown = null;
                     for (const uri of popCandidates) {
                       try {
-                        const created = await Audio.Sound.createAsync({ uri }, { volume: Math.max(0, Math.min(1, volume * 0.8)), shouldPlay: true });
+                        const created = await Audio.Sound.createAsync({ uri }, { volume: Math.max(0.1, Math.min(1, volume * 0.8)), shouldPlay: true });
                         pop = created.sound;
                         break;
                       } catch (e) {
@@ -198,7 +197,7 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
                 SOUND_BOOM_MP3,
                 SOUND_BOOM_WAV_FALLBACK,
               ].filter(Boolean) as string[]);
-              boom.volume = Math.max(0, Math.min(1, volume));
+              boom.volume = Math.max(0.1, Math.min(1, volume));
               const p = boom.play();
               if (p && typeof (p as Promise<void>).catch === 'function') {
                 (p as Promise<void>).catch((e) => console.log('[MatchCelebration] web boom play blocked or failed', e));
@@ -211,7 +210,7 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
                       SOUND_POP_MP3,
                       SOUND_POP_WAV_FALLBACK,
                     ].filter(Boolean) as string[]);
-                    pop.volume = Math.max(0, Math.min(1, volume * 0.8));
+                    pop.volume = Math.max(0.1, Math.min(1, volume * 0.8));
                     const pp = pop.play();
                     if (pp && typeof (pp as Promise<void>).catch === 'function') {
                       (pp as Promise<void>).catch((e) => console.log('[MatchCelebration] web pop play blocked or failed', e));
@@ -249,7 +248,7 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
     Animated.sequence([shockwave, showLabel, Animated.parallel(anims), hideLabel]).start(({ finished }) => {
       if (finished && onDone) onDone();
     });
-  }, [visible, particles, duration, labelOpacity, labelY, onDone, vibrate, soundEnabled, volume, clampedIntensity, flashOpacity, ringOpacity, ringScale, lottieUrl]);
+  }, [visible, particles, duration, labelOpacity, labelY, onDone, vibrate, soundEnabled, volume, clampedIntensity, flashOpacity, ringOpacity, ringScale, soundBoomUrl, soundPopUrl]);
 
   if (!visible) return null;
 

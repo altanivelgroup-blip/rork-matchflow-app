@@ -659,7 +659,7 @@ export default function GalleryScreen() {
 
   const playClickFx = useCallback(async (kind: 'boom' | 'pop', intensityVal: number) => {
     try {
-      const vol = Math.max(0.1, Math.min(1, intensityVal / 10));
+      const vol = Math.max(0.2, Math.min(1, intensityVal / 10));
       if (Platform.OS === 'web') {
         const url = kind === 'boom'
           ? 'https://cdn.jsdelivr.net/gh/naptha/tinyfiles@main/sfx/boom.mp3'
@@ -668,7 +668,10 @@ export default function GalleryScreen() {
         if (AudioCtor) {
           const audio = new AudioCtor(url);
           if (typeof audio.volume === 'number') audio.volume = vol;
-          await audio.play();
+          const playPromise = audio.play();
+          if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch((e) => console.log('[Gallery] web audio play blocked', e));
+          }
         }
       } else {
         try {
@@ -1214,6 +1217,9 @@ export default function GalleryScreen() {
           intensity={celebration.intensity}
           theme={celebration.theme}
           message={celebration.message}
+          volume={0.8}
+          soundEnabled={true}
+          vibrate={true}
           onDone={() => setCelebration(c => ({ ...c, visible: false }))}
         />
       )}

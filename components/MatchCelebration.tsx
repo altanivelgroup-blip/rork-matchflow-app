@@ -35,10 +35,10 @@ const { width: W, height: H } = Dimensions.get('window');
 
 const DEFAULT_FIREWORKS_JSON = 'https://assets8.lottiefiles.com/packages/lf20_pzud6sat.json';
 const ALT_FIREWORKS_JSON = 'https://assets8.lottiefiles.com/packages/lf20_kyi6f3u3.json';
-const SOUND_BOOM_MP3 = 'https://assets.mixkit.co/active_storage/sfx/2560/2560-preview.mp3';
-const SOUND_POP_MP3 = 'https://assets.mixkit.co/active_storage/sfx/2561/2561-preview.mp3';
-const SOUND_BOOM_WAV_FALLBACK = 'https://cdn.freesound.org/previews/235/235968_3984679-lq.wav';
-const SOUND_POP_WAV_FALLBACK = 'https://cdn.freesound.org/previews/341/341695_6262555-lq.wav';
+const SOUND_BOOM_MP3 = 'https://upload.wikimedia.org/wikipedia/commons/1/17/Explosion1.wav';
+const SOUND_POP_MP3 = 'https://upload.wikimedia.org/wikipedia/commons/3/3f/Small_explosion.wav';
+const SOUND_BOOM_WAV_FALLBACK = 'https://cdn.jsdelivr.net/gh/naptha/tiny-sound@master/sounds/explosion.wav';
+const SOUND_POP_WAV_FALLBACK = 'https://cdn.jsdelivr.net/gh/naptha/tiny-sound@master/sounds/pop.wav';
 
 export default function MatchCelebration({ visible, onDone, intensity = 1, theme = 'fireworks', message = "It's a Match!", volume = 0.9, soundEnabled = true, vibrate = true, lottieUrl, gifUrl, soundBoomUrl, soundPopUrl }: MatchCelebrationProps) {
   const clampedIntensity = Math.max(0.05, Math.min(1, intensity));
@@ -160,15 +160,29 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
           } else {
             try {
               const isHuge = clampedIntensity >= 0.9;
-              const boom = createWebAudioWithFallback([soundBoomUrl, SOUND_BOOM_MP3, SOUND_BOOM_WAV_FALLBACK].filter(Boolean) as string[]);
+              const boom = createWebAudioWithFallback([
+                soundBoomUrl,
+                SOUND_BOOM_MP3,
+                SOUND_BOOM_WAV_FALLBACK,
+              ].filter(Boolean) as string[]);
               boom.volume = Math.max(0, Math.min(1, volume));
-              void boom.play();
+              const p = boom.play();
+              if (p && typeof (p as Promise<void>).catch === 'function') {
+                (p as Promise<void>).catch((e) => console.log('[MatchCelebration] web boom play blocked or failed', e));
+              }
               if (isHuge) {
                 setTimeout(() => {
                   try {
-                    const pop = createWebAudioWithFallback([soundPopUrl, SOUND_POP_MP3, SOUND_POP_WAV_FALLBACK].filter(Boolean) as string[]);
+                    const pop = createWebAudioWithFallback([
+                      soundPopUrl,
+                      SOUND_POP_MP3,
+                      SOUND_POP_WAV_FALLBACK,
+                    ].filter(Boolean) as string[]);
                     pop.volume = Math.max(0, Math.min(1, volume * 0.8));
-                    void pop.play();
+                    const pp = pop.play();
+                    if (pp && typeof (pp as Promise<void>).catch === 'function') {
+                      (pp as Promise<void>).catch((e) => console.log('[MatchCelebration] web pop play blocked or failed', e));
+                    }
                   } catch (er) {
                     console.log('[MatchCelebration] web pop sound error', er);
                   }
@@ -291,19 +305,21 @@ function createWebAudioWithFallback(sources: string[]) {
     const mime = getMimeFromUrl(src);
     if (!mime || audio.canPlayType(mime)) {
       audio.src = src;
-      audio.load();
+      try {
+        audio.load();
+      } catch {}
       return true;
     }
     return pickNextPlayable();
   };
 
-  audio.onerror = () => {
+  audio.addEventListener('error', () => {
     const advanced = pickNextPlayable();
     if (!advanced) {
       audio.onerror = null;
       console.log('[MatchCelebration] No playable audio source found for', candidates);
     }
-  };
+  });
 
   // Initialize with the first playable source
   pickNextPlayable();

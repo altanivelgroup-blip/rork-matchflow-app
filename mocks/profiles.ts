@@ -21,6 +21,7 @@ export const mockProfiles: MockProfile[] = [
     interests: ["Yoga", "Travel", "Photography", "Cooking"],
     likedYou: true,
     location: { lat: 37.7749, lon: -122.4194, city: "San Francisco" },
+    faceScoreFromVerification: 0.92,
   },
   {
     id: "2",
@@ -31,6 +32,7 @@ export const mockProfiles: MockProfile[] = [
     interests: ["Hiking", "Coffee", "Music", "Reading"],
     likedYou: false,
     location: { lat: 34.0522, lon: -118.2437, city: "Los Angeles" },
+    faceScoreFromVerification: 0.75,
   },
   {
     id: "3",
@@ -41,6 +43,7 @@ export const mockProfiles: MockProfile[] = [
     interests: ["Art", "Movies", "Wine", "Dancing"],
     likedYou: true,
     location: { lat: 37.3382, lon: -121.8863, city: "San Jose" },
+    faceScoreFromVerification: 0.88,
   },
   {
     id: "4",
@@ -61,6 +64,7 @@ export const mockProfiles: MockProfile[] = [
     interests: ["Reading", "Cooking", "Wine Tasting", "Gardening"],
     likedYou: true,
     location: { lat: 37.8044, lon: -122.2712, city: "Oakland" },
+    faceScoreFromVerification: 0.95,
   },
   {
     id: "6",
@@ -91,5 +95,6 @@ export const mockProfiles: MockProfile[] = [
     interests: ["Travel", "Food", "Languages", "History"],
     likedYou: true,
     location: { lat: 40.7128, lon: -74.006, city: "New York" },
+    faceScoreFromVerification: 0.83,
   },
 ];

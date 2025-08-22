@@ -57,6 +57,7 @@ export interface UserSettings {
   verificationMode?: VerificationModePref;
   captureChoice?: CaptureChoice;
   matchAnimationsEnabled?: boolean;
+  matchAnimationIntensity?: number; // 1-10
   preferredGateway?: PreferredGateway;
 }
 
@@ -207,6 +208,7 @@ export class MockBackend implements BackendAPI {
       verificationMode: current.verificationMode ?? 'auto',
       captureChoice: current.captureChoice ?? 'static',
       matchAnimationsEnabled: typeof current.matchAnimationsEnabled === 'boolean' ? current.matchAnimationsEnabled : true,
+      matchAnimationIntensity: typeof current.matchAnimationIntensity === 'number' ? current.matchAnimationIntensity : 7,
       preferredGateway: (current.preferredGateway as PreferredGateway) ?? 'paypal',
       ...settings,
     };

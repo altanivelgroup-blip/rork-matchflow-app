@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert, GestureResponderEvent, LayoutChangeEvent } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useAnalytics } from '@/contexts/AnalyticsContext';
-import { Languages, ToggleLeft, ToggleRight, Crown, WifiOff, RefreshCw, CalendarX2, CreditCard, Globe, Webcam, Image as ImageIcon, Shuffle, Sparkles, Shield, ChevronRight, WalletCards, Bell, FileText } from 'lucide-react-native';
+import { Languages, ToggleLeft, ToggleRight, Crown, WifiOff, RefreshCw, CalendarX2, CreditCard, Globe, Webcam, Image as ImageIcon, Shuffle, Sparkles, Shield, ChevronRight, WalletCards, Bell, FileText, Lock } from 'lucide-react-native';
 import { useTranslate } from '@/contexts/TranslateContext';
 import { supportedLocales, SupportedLocale } from '@/lib/i18n';
 import { useMembership } from '@/contexts/MembershipContext';
@@ -97,6 +97,7 @@ export default function SettingsScreen() {
   const { enabled, setEnabled, targetLang, setTargetLang } = useTranslate();
   const { locale, setLocale } = useI18n();
   const { user } = useAuth();
+  const { tier } = useMembership();
   const router = useRouter();
   const uid = user?.email ?? 'guest';
   const analytics = useAnalytics();
@@ -108,6 +109,8 @@ export default function SettingsScreen() {
   const [captureChoice, setCaptureChoice] = useState<CaptureChoice>('static');
   const [matchAnimationsEnabled, setMatchAnimationsEnabled] = useState<boolean>(true);
   const [preferredGateway, setPreferredGateway] = useState<PreferredGateway>('paypal');
+  const [matchAnimationIntensity, setMatchAnimationIntensity] = useState<number>(7);
+  const [sliderWidth, setSliderWidth] = useState<number>(240);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -148,6 +151,10 @@ export default function SettingsScreen() {
         if (typeof s.matchAnimationsEnabled === 'boolean') {
           setMatchAnimationsEnabled(s.matchAnimationsEnabled);
         }
+        if (typeof s.matchAnimationIntensity === 'number') {
+          const clamped = Math.max(1, Math.min(10, Math.round(s.matchAnimationIntensity)));
+          setMatchAnimationIntensity(clamped);
+        }
         if (s.preferredGateway === 'paypal' || s.preferredGateway === 'stripe') {
           setPreferredGateway(s.preferredGateway);
         }
@@ -168,14 +175,14 @@ export default function SettingsScreen() {
   useEffect(() => {
     const persist = async () => {
       try {
-        await backend.saveUserSettings(uid, { preferredLanguage: locale, translateTarget: targetLang, translateEnabled: enabled, verificationMode, captureChoice, matchAnimationsEnabled, preferredGateway });
+        await backend.saveUserSettings(uid, { preferredLanguage: locale, translateTarget: targetLang, translateEnabled: enabled, verificationMode, captureChoice, matchAnimationsEnabled, matchAnimationIntensity, preferredGateway });
         console.log('[Settings] saved settings to backend');
       } catch (e) {
         console.log('[Settings] save settings error', e);
       }
     };
     if (mountedRef.current) persist();
-  }, [locale, targetLang, enabled, uid, verificationMode, captureChoice, matchAnimationsEnabled, preferredGateway]);
+  }, [locale, targetLang, enabled, uid, verificationMode, captureChoice, matchAnimationsEnabled, matchAnimationIntensity, preferredGateway]);
 
   const notif = useNotifications();
   return (
@@ -352,11 +359,72 @@ export default function SettingsScreen() {
             onPress={() => setMatchAnimationsEnabled(!matchAnimationsEnabled)}
             style={styles.toggle}
             testID="toggle-match-animations"
+            accessibilityRole="switch"
+            accessibilityState={{ checked: matchAnimationsEnabled }}
+            accessibilityLabel="Toggle match celebration animations"
           >
             {matchAnimationsEnabled ? <ToggleRight color="#10B981" size={28} /> : <ToggleLeft color="#9CA3AF" size={28} />}
           </TouchableOpacity>
         </View>
         <Text style={{ marginTop: 8, color: '#6B7280', fontSize: 12 }}>Show confetti/hearts when you have a mutual match. Useful to disable for motion sensitivity.</Text>
+
+        <View style={[styles.intensityBlock, tier !== 'plus' && styles.itemDisabled]}>
+          <View style={styles.intensityHeader}>
+            <Text style={styles.intensityLabel}>Fireworks Intensity</Text>
+            <Text style={styles.intensityValue} accessibilityLiveRegion="polite">{matchAnimationIntensity}/10</Text>
+          </View>
+          {tier !== 'plus' ? (
+            <View style={styles.lockRow}>
+              <Lock size={14} color="#F59E0B" />
+              <Text style={styles.lockText}>Premium only. Upgrade to adjust intensity.</Text>
+            </View>
+          ) : null}
+
+          <View
+            style={styles.sliderTrack}
+            onLayout={(e: LayoutChangeEvent) => {
+              const w = e.nativeEvent.layout.width;
+              if (w && w > 0) setSliderWidth(w);
+            }}
+            onStartShouldSetResponder={() => true}
+            onResponderGrant={(e) => {
+              if (tier !== 'plus') return;
+              const v = calcIntensityFromEvent(e, sliderWidth);
+              if (!v) return;
+              setMatchAnimationIntensity(v);
+            }}
+            onResponderMove={(e) => {
+              if (tier !== 'plus') return;
+              const v = calcIntensityFromEvent(e, sliderWidth);
+              if (!v) return;
+              setMatchAnimationIntensity(v);
+            }}
+            onResponderRelease={() => {}}
+            testID="intensity-slider"
+            accessibilityRole="adjustable"
+            accessibilityLabel="Fireworks intensity"
+            accessibilityHint="Swipe left or right to decrease or increase the intensity"
+          >
+            <View style={[styles.sliderFill, { width: Math.max(0, Math.min(1, matchAnimationIntensity/10)) * sliderWidth }]} />
+            <View style={[styles.sliderThumb, { left: Math.max(0, Math.min(1, matchAnimationIntensity/10)) * sliderWidth - 10 }]} />
+          </View>
+          <View style={styles.sliderTicks}>
+            {Array.from({ length: 10 }).map((_, i) => (
+              <TouchableOpacity
+                key={`tick-${i+1}`}
+                onPress={() => tier === 'plus' && setMatchAnimationIntensity(i+1)}
+                style={[styles.tick, (i+1) <= matchAnimationIntensity && styles.tickActive]}
+                accessibilityRole="button"
+                accessibilityLabel={`Set intensity to ${i+1}`}
+                testID={`intensity-${i+1}`}
+                disabled={tier !== 'plus'}
+              />
+            ))}
+          </View>
+          <Text style={styles.note}>
+            Accessibility: If you have motion sensitivity, keep intensity low or turn celebrations off above. We reduce animation complexity automatically.
+          </Text>
+        </View>
       </View>
 
       <View style={styles.card}>
@@ -479,6 +547,19 @@ export default function SettingsScreen() {
   );
 }
 
+function calcIntensityFromEvent(e: GestureResponderEvent, width: number): number | null {
+  try {
+    const lx = (e.nativeEvent as any)?.locationX as number | undefined;
+    const w = Math.max(1, width || 240);
+    const rel = Math.max(0, Math.min(1, (typeof lx === 'number' ? lx : 0) / w));
+    const val = Math.round(rel * 9) + 1;
+    return Math.max(1, Math.min(10, val));
+  } catch (err) {
+    console.log('[Settings] calcIntensityFromEvent error', err);
+    return null;
+  }
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F5F5' },
   card: {
@@ -526,4 +607,16 @@ const styles = StyleSheet.create({
   itemDisabled: { opacity: 0.5 },
   textDisabled: { color: '#9CA3AF' },
   note: { marginTop: 8, color: '#6B7280', fontSize: 12 },
+  intensityBlock: { marginTop: 12 },
+  intensityHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  intensityLabel: { fontSize: 13, color: '#374151', fontWeight: '700' },
+  intensityValue: { fontSize: 12, color: '#6B7280', fontWeight: '800' },
+  lockRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, backgroundColor: '#FFFBEB', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#FDE68A' },
+  lockText: { color: '#92400E', fontSize: 12, fontWeight: '700' },
+  sliderTrack: { marginTop: 10, height: 24, borderRadius: 12, backgroundColor: '#E5E7EB', position: 'relative', overflow: 'hidden' },
+  sliderFill: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: '#10B981' },
+  sliderThumb: { position: 'absolute', top: 2, width: 20, height: 20, borderRadius: 10, backgroundColor: '#111827', borderWidth: 2, borderColor: '#fff', elevation: 2 },
+  sliderTicks: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
+  tick: { width: 16, height: 4, borderRadius: 2, backgroundColor: '#E5E7EB' },
+  tickActive: { backgroundColor: '#10B981' },
 });

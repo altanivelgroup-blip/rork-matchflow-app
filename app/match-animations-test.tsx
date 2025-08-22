@@ -1,10 +1,12 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Platform } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import MatchCelebration, { CelebrationTheme } from '@/components/MatchCelebration';
 import type { MockProfile } from '@/mocks/profiles';
 import { mockProfiles } from '@/mocks/profiles';
-import { Sparkles, Play, Square, Gauge, Globe2, MapPin, Heart, X } from 'lucide-react-native';
+import { Sparkles, Play, Square, Gauge, Globe2, MapPin, Heart, X, Settings } from 'lucide-react-native';
+import { backend } from '@/lib/backend';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface RunConfig {
   profile: MockProfile | null;
@@ -21,6 +23,10 @@ const speedToMultiplier: Record<RunConfig['speed'], number> = {
 };
 
 export default function MatchAnimationsTest() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const uid = user?.email ?? 'guest';
+
   const [config, setConfig] = useState<RunConfig>({
     profile: null,
     aiScore: 85,
@@ -32,6 +38,9 @@ export default function MatchAnimationsTest() {
   const [log, setLog] = useState<string[]>([]);
   const runningRef = useRef<boolean>(false);
 
+  const [settingsEnabled, setSettingsEnabled] = useState<boolean>(true);
+  const [settingsIntensity, setSettingsIntensity] = useState<number>(7);
+
   const addLog = useCallback((msg: string) => {
     const line = `[${new Date().toISOString()}] ${msg}`;
     console.log('[MatchAnimationsTest]', line);
@@ -39,15 +48,33 @@ export default function MatchAnimationsTest() {
   }, []);
 
   const intensity = useMemo(() => {
-    const base = Math.max(0, Math.min(1, config.aiScore / 100));
-    const m = speedToMultiplier[config.speed] ?? 1;
-    return Math.max(0.1, Math.min(1, base * m));
-  }, [config.aiScore, config.speed]);
+    const aiFactor = Math.max(0, Math.min(1, config.aiScore / 100));
+    const userFactor = Math.max(0.1, Math.min(1, (settingsIntensity ?? 7) / 10));
+    const speedFactor = speedToMultiplier[config.speed] ?? 1;
+    const combined = aiFactor * (0.4 + 0.6 * userFactor) * speedFactor;
+    return Math.max(0.05, Math.min(1, combined));
+  }, [config.aiScore, config.speed, settingsIntensity]);
 
   const isInternational = useMemo(() => {
     const d = config.profile?.distanceFromUser ?? 0;
     return d > 1000;
   }, [config.profile]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const s = await backend.fetchUserSettings(uid);
+        if (cancelled || !s) return;
+        setSettingsEnabled(typeof s.matchAnimationsEnabled === 'boolean' ? s.matchAnimationsEnabled : true);
+        setSettingsIntensity(typeof s.matchAnimationIntensity === 'number' ? Math.max(1, Math.min(10, Math.round(s.matchAnimationIntensity))) : 7);
+      } catch (e) {
+        console.log('[MatchAnimationsTest] load settings error', e);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [uid]);
 
   const onRun = useCallback(() => {
     try {
@@ -61,7 +88,12 @@ export default function MatchAnimationsTest() {
         return;
       }
       const willMatch = !!config.simulateMutual && (config.profile.likedYou || config.aiScore >= 80);
-      addLog(`Run: profile=${config.profile.name} aiScore=${config.aiScore} theme=${config.theme} speed=${config.speed} mutual=${willMatch}`);
+      addLog(`Run: profile=${config.profile.name} aiScore=${config.aiScore} theme=${config.theme} speed=${config.speed} mutual=${willMatch} settingsEnabled=${settingsEnabled} settingsIntensity=${settingsIntensity}`);
+      if (!settingsEnabled) {
+        setVisible(false);
+        addLog('Celebrations disabled by user settings');
+        return;
+      }
       if (!willMatch) {
         setVisible(false);
         addLog('No match: showing subtle feedback only');
@@ -73,7 +105,7 @@ export default function MatchAnimationsTest() {
     } catch (e) {
       addLog(`Crash in onRun: ${(e as Error).message}`);
     }
-  }, [config, addLog]);
+  }, [config, addLog, settingsEnabled, settingsIntensity]);
 
   const onDone = useCallback(() => {
     runningRef.current = false;
@@ -135,6 +167,27 @@ export default function MatchAnimationsTest() {
         ) : (
           <Text style={styles.muted}>Pick a scenario above</Text>
         )}
+
+        <View style={styles.settingsRow}>
+          <Text style={styles.smallMuted}>Settings: {settingsEnabled ? 'On' : 'Off'} · Intensity {settingsIntensity}/10</Text>
+          <TouchableOpacity style={styles.linkBtn} onPress={() => router.push('/(tabs)/settings')} accessibilityRole="button" testID="btn-open-settings">
+            <Settings size={14} color="#2563EB" />
+            <Text style={styles.linkText}>Open Settings</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.linkBtn} onPress={async () => {
+            try {
+              const s = await backend.fetchUserSettings(uid);
+              setSettingsEnabled(typeof s?.matchAnimationsEnabled === 'boolean' ? s?.matchAnimationsEnabled : true);
+              setSettingsIntensity(typeof s?.matchAnimationIntensity === 'number' ? Math.max(1, Math.min(10, Math.round(s?.matchAnimationIntensity as number))) : 7);
+              addLog('Reloaded settings from backend');
+            } catch (e) {
+              Alert.alert('Error', 'Failed to reload settings');
+            }
+          }} accessibilityRole="button" testID="btn-reload-settings">
+            <Gauge size={14} color="#10B981" />
+            <Text style={styles.linkText}>Reload</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.rowWrap}>
           {themes.map((t) => (
@@ -258,6 +311,10 @@ const styles = StyleSheet.create({
   muted: { color: '#6B7280', marginTop: 4 },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
   rowWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  settingsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
+  smallMuted: { color: '#6B7280', fontSize: 12 },
+  linkBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 9999, backgroundColor: '#E0F2FE' },
+  linkText: { color: '#2563EB', fontWeight: '800' },
   selectedRow: { marginTop: 6 },
   selectedName: { fontSize: 14, color: '#111827', fontWeight: '700' },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 9999, backgroundColor: '#E5E7EB' },

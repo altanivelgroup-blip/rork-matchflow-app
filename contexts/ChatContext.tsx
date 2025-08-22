@@ -1,11 +1,26 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { verifySingleImage } from '@/lib/faceVerification';
 import { useTranslate } from '@/contexts/TranslateContext';
 import { SupportedLocale } from '@/lib/i18n';
+import { getFirebase } from '@/lib/firebase';
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  onSnapshot,
+  query,
+  orderBy,
+  where,
+  updateDoc,
+  doc,
+  setDoc,
+  getFirestore,
+} from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 export type ChatMessageType = 'text' | 'image' | 'video';
 
@@ -19,6 +34,12 @@ export interface ChatMessage {
   createdAt: number;
   translatedText?: string;
   detectedLang?: string;
+  readBy?: string[];
+  status?: 'sent' | 'delivered' | 'read';
+}
+
+interface TypingState {
+  [matchId: string]: boolean;
 }
 
 interface ChatContextType {
@@ -27,9 +48,16 @@ interface ChatContextType {
   sendImage: (matchId: string) => Promise<void>;
   sendVideo: (matchId: string) => Promise<void>;
   subscribe: (matchId: string, cb: () => void) => () => void;
+  isTyping: (matchId: string) => boolean;
+  setTyping: (matchId: string, typing: boolean) => Promise<void>;
+  reportUser: (matchId: string, reason: string) => Promise<void>;
+  blockUser: (matchId: string) => Promise<void>;
+  usingFirebase: boolean;
+  simulateIncoming: (matchId: string, text: string) => Promise<void>;
 }
 
 const STORAGE_KEY = 'chat_messages_v1';
+const STORAGE_BLOCKED = 'chat_blocked_v1';
 
 class Emitter {
   private listeners: Record<string, Set<() => void>> = {};
@@ -48,10 +76,17 @@ class Emitter {
 
 export const [ChatProvider, useChat] = createContextHook<ChatContextType>(() => {
   const [messagesMap, setMessagesMap] = useState<Record<string, ChatMessage[]>>({});
+  const [typingMap, setTypingMap] = useState<TypingState>({});
+  const [blocked, setBlocked] = useState<Record<string, boolean>>({});
+  const [usingFirebase, setUsingFirebase] = useState<boolean>(false);
   const emitterRef = useRef(new Emitter());
   const timeoutsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const mountedRef = useRef<boolean>(false);
   const { enabled: tEnabled, translateTo, targetLang } = useTranslate();
+
+  const firebaseRefs = useRef<{ db: ReturnType<typeof getFirestore> | null; storage: ReturnType<typeof getStorage> | null }>({ db: null, storage: null });
+  const unsubscribeMap = useRef<Record<string, () => void>>({});
+  const typingUnsubs = useRef<Record<string, () => void>>({});
 
   useEffect(() => {
     mountedRef.current = true;
@@ -63,11 +98,29 @@ export const [ChatProvider, useChat] = createContextHook<ChatContextType>(() => 
       } catch (e) {
         console.log('[Chat] load error', e);
       }
+      try {
+        const rawBlocked = await AsyncStorage.getItem(STORAGE_BLOCKED);
+        const parsedBlocked: Record<string, boolean> = rawBlocked ? JSON.parse(rawBlocked) : {};
+        setBlocked(parsedBlocked);
+      } catch (e) {
+        console.log('[Chat] load blocked error', e);
+      }
+      try {
+        const { db, storage } = getFirebase();
+        firebaseRefs.current = { db, storage } as const;
+        setUsingFirebase(true);
+        console.log('[Chat] Firebase enabled');
+      } catch (e) {
+        console.log('[Chat] Firebase not configured, falling back to local mode', e);
+        setUsingFirebase(false);
+      }
     })();
     return () => {
       mountedRef.current = false;
       timeoutsRef.current.forEach((id) => clearTimeout(id));
       timeoutsRef.current.clear();
+      Object.values(unsubscribeMap.current).forEach((u) => u());
+      Object.values(typingUnsubs.current).forEach((u) => u());
     };
   }, []);
 
@@ -81,9 +134,64 @@ export const [ChatProvider, useChat] = createContextHook<ChatContextType>(() => 
     })();
   }, [messagesMap]);
 
+  const attachFirebaseListeners = useCallback((matchId: string) => {
+    if (!firebaseRefs.current.db) return;
+    if (unsubscribeMap.current[matchId]) return;
+    const db = firebaseRefs.current.db;
+    const messagesCol = collection(db, 'chats', matchId, 'messages');
+    const q = query(messagesCol, orderBy('createdAt', 'asc'));
+    const unsub = onSnapshot(q, async (snap) => {
+      const list: ChatMessage[] = [];
+      const toMarkRead: string[] = [];
+      snap.forEach((docSnap) => {
+        const d = docSnap.data() as any;
+        const createdAtTs: number = d.createdAt?.toMillis ? d.createdAt.toMillis() : (typeof d.createdAt === 'number' ? d.createdAt : Date.now());
+        const item: ChatMessage = {
+          id: docSnap.id,
+          matchId,
+          type: d.type as ChatMessageType,
+          text: d.text,
+          mediaUri: d.mediaUrl,
+          sender: d.sender as 'user' | 'match',
+          createdAt: createdAtTs,
+          translatedText: d.translatedText,
+          detectedLang: d.detectedLang,
+          readBy: Array.isArray(d.readBy) ? d.readBy : [],
+          status: d.status as ChatMessage['status'],
+        };
+        list.push(item);
+        if (item.sender === 'match' && item.status !== 'read') {
+          toMarkRead.push(docSnap.id);
+        }
+      });
+      setMessagesMap((prev) => ({ ...prev, [matchId]: list }));
+      emitterRef.current.emit(matchId);
+      if (toMarkRead.length && firebaseRefs.current.db) {
+        try {
+          const dbLocal = firebaseRefs.current.db;
+          await Promise.all(
+            toMarkRead.map((id) => updateDoc(doc(dbLocal, 'chats', matchId, 'messages', id), { status: 'read' }))
+          );
+        } catch (e) {
+          console.log('[Chat] mark read error', e);
+        }
+      }
+    });
+    unsubscribeMap.current[matchId] = unsub;
+
+    const typingDoc = doc(db, 'chats', matchId, 'meta', 'typing');
+    const unsubTyping = onSnapshot(typingDoc, (snap) => {
+      const data = snap.data() as any;
+      const isTyping = !!data?.matchTyping;
+      setTypingMap((prev) => ({ ...prev, [matchId]: isTyping }));
+    }, (err) => console.log('[Chat] typing listen error', err));
+    typingUnsubs.current[matchId] = unsubTyping;
+  }, []);
+
   const getMessages = useCallback((matchId: string) => {
+    if (usingFirebase) attachFirebaseListeners(matchId);
     return (messagesMap[matchId] ?? []).sort((a, b) => a.createdAt - b.createdAt);
-  }, [messagesMap]);
+  }, [messagesMap, usingFirebase, attachFirebaseListeners]);
 
   const appendMessage = useCallback((matchId: string, msg: ChatMessage) => {
     setMessagesMap((prev) => {
@@ -94,6 +202,29 @@ export const [ChatProvider, useChat] = createContextHook<ChatContextType>(() => 
       return next;
     });
     emitterRef.current.emit(matchId);
+  }, []);
+
+  const uploadToStorage = useCallback(async (uri: string, path: string): Promise<string> => {
+    const storage = firebaseRefs.current.storage;
+    if (!storage) return uri;
+    const r = ref(storage, path);
+    let blob: Blob | null = null;
+    try {
+      if (Platform.OS === 'web') {
+        const resp = await fetch(uri);
+        blob = await resp.blob();
+      } else {
+        const resp = await fetch(uri);
+        blob = await resp.blob();
+      }
+      const bytes = await blob.arrayBuffer();
+      await uploadBytes(r, new Uint8Array(bytes));
+      const url = await getDownloadURL(r);
+      return url;
+    } catch (e) {
+      console.log('[Chat] upload error', e);
+      return uri;
+    }
   }, []);
 
   const sendText = useCallback(async (matchId: string, text: string, recipientLang?: SupportedLocale) => {
@@ -112,31 +243,68 @@ export const [ChatProvider, useChat] = createContextHook<ChatContextType>(() => 
     } catch (e) {
       console.log('[Chat] auto-translate failed, sending original', e);
     }
-    const msg: ChatMessage = {
-      id: String(Date.now()),
-      matchId,
-      type: 'text',
-      text: outgoing,
-      sender: 'user',
-      createdAt: Date.now(),
-      translatedText,
-      detectedLang,
-    };
-    appendMessage(matchId, msg);
-    const id = setTimeout(() => {
-      if (!mountedRef.current) return;
-      const echo: ChatMessage = {
-        id: String(Date.now() + 1),
+
+    if (usingFirebase && firebaseRefs.current.db) {
+      try {
+        const db = firebaseRefs.current.db;
+        const colRef = collection(db, 'chats', matchId, 'messages');
+        await addDoc(colRef, {
+          type: 'text',
+          text: outgoing,
+          sender: 'user',
+          createdAt: serverTimestamp(),
+          translatedText: translatedText ?? null,
+          detectedLang: detectedLang ?? null,
+          readBy: [],
+          status: 'sent',
+        });
+      } catch (e) {
+        console.log('[Chat] sendText firebase error, fallback local', e);
+        const msg: ChatMessage = {
+          id: String(Date.now()),
+          matchId,
+          type: 'text',
+          text: outgoing,
+          sender: 'user',
+          createdAt: Date.now(),
+          translatedText,
+          detectedLang,
+          status: 'sent',
+          readBy: [],
+        };
+        appendMessage(matchId, msg);
+      }
+    } else {
+      const msg: ChatMessage = {
+        id: String(Date.now()),
         matchId,
         type: 'text',
-        text: 'Got it! 😊',
-        sender: 'match',
-        createdAt: Date.now() + 1,
+        text: outgoing,
+        sender: 'user',
+        createdAt: Date.now(),
+        translatedText,
+        detectedLang,
+        status: 'sent',
+        readBy: [],
       };
-      appendMessage(matchId, echo);
-    }, 600);
-    timeoutsRef.current.add(id);
-  }, [appendMessage, tEnabled, translateTo, targetLang]);
+      appendMessage(matchId, msg);
+      const id = setTimeout(() => {
+        if (!mountedRef.current) return;
+        const echo: ChatMessage = {
+          id: String(Date.now() + 1),
+          matchId,
+          type: 'text',
+          text: 'Got it! 😊',
+          sender: 'match',
+          createdAt: Date.now() + 1,
+          status: 'delivered',
+          readBy: [],
+        };
+        appendMessage(matchId, echo);
+      }, 600);
+      timeoutsRef.current.add(id);
+    }
+  }, [appendMessage, tEnabled, translateTo, targetLang, usingFirebase]);
 
   const requestPerms = async () => {
     const lib = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -165,6 +333,26 @@ export const [ChatProvider, useChat] = createContextHook<ChatContextType>(() => 
         Alert.alert('Verification failed', v.reason ?? "Photo doesn't seem real—try again!");
         return;
       }
+
+      if (usingFirebase && firebaseRefs.current.db) {
+        const url = await uploadToStorage(uri, `chats/${matchId}/${Date.now()}.jpg`);
+        try {
+          const db = firebaseRefs.current.db;
+          const colRef = collection(db, 'chats', matchId, 'messages');
+          await addDoc(colRef, {
+            type: 'image',
+            mediaUrl: url,
+            sender: 'user',
+            createdAt: serverTimestamp(),
+            readBy: [],
+            status: 'sent',
+          });
+          return;
+        } catch (e) {
+          console.log('[Chat] sendImage firebase error, fallback local', e);
+        }
+      }
+
       const msg: ChatMessage = {
         id: String(Date.now()),
         matchId,
@@ -172,13 +360,15 @@ export const [ChatProvider, useChat] = createContextHook<ChatContextType>(() => 
         mediaUri: uri,
         sender: 'user',
         createdAt: Date.now(),
+        status: 'sent',
+        readBy: [],
       };
       appendMessage(matchId, msg);
     } catch (e) {
       console.log('[Chat] sendImage error', e);
       Alert.alert('Error', 'Unable to attach image.');
     }
-  }, [appendMessage]);
+  }, [appendMessage, uploadToStorage, usingFirebase]);
 
   const sendVideo = useCallback(async (matchId: string) => {
     try {
@@ -195,6 +385,26 @@ export const [ChatProvider, useChat] = createContextHook<ChatContextType>(() => 
       if (res.canceled) return;
       const uri = res.assets?.[0]?.uri ?? '';
       if (!uri) return;
+
+      if (usingFirebase && firebaseRefs.current.db) {
+        const url = await uploadToStorage(uri, `chats/${matchId}/${Date.now()}.mp4`);
+        try {
+          const db = firebaseRefs.current.db;
+          const colRef = collection(db, 'chats', matchId, 'messages');
+          await addDoc(colRef, {
+            type: 'video',
+            mediaUrl: url,
+            sender: 'user',
+            createdAt: serverTimestamp(),
+            readBy: [],
+            status: 'sent',
+          });
+          return;
+        } catch (e) {
+          console.log('[Chat] sendVideo firebase error, fallback local', e);
+        }
+      }
+
       const msg: ChatMessage = {
         id: String(Date.now()),
         matchId,
@@ -202,17 +412,95 @@ export const [ChatProvider, useChat] = createContextHook<ChatContextType>(() => 
         mediaUri: uri,
         sender: 'user',
         createdAt: Date.now(),
+        status: 'sent',
+        readBy: [],
       };
       appendMessage(matchId, msg);
     } catch (e) {
       console.log('[Chat] sendVideo error', e);
       Alert.alert('Error', 'Unable to attach video.');
     }
-  }, [appendMessage]);
+  }, [appendMessage, uploadToStorage, usingFirebase]);
 
   const subscribe = useCallback((matchId: string, cb: () => void) => {
     return emitterRef.current.on(matchId, cb);
   }, []);
+
+  const isTyping = useCallback((matchId: string) => {
+    return !!typingMap[matchId];
+  }, [typingMap]);
+
+  const setTyping = useCallback(async (matchId: string, typing: boolean) => {
+    setTypingMap((prev) => ({ ...prev, [matchId]: typing }));
+    if (usingFirebase && firebaseRefs.current.db) {
+      try {
+        const db = firebaseRefs.current.db;
+        const typingDoc = doc(db, 'chats', matchId, 'meta', 'typing');
+        await setDoc(typingDoc, { userTyping: typing }, { merge: true });
+      } catch (e) {
+        console.log('[Chat] setTyping error', e);
+      }
+    }
+  }, [usingFirebase]);
+
+  const reportUser = useCallback(async (matchId: string, reason: string) => {
+    if (usingFirebase && firebaseRefs.current.db) {
+      try {
+        const db = firebaseRefs.current.db;
+        await addDoc(collection(db, 'reports'), {
+          matchId,
+          reason,
+          createdAt: serverTimestamp(),
+        });
+        Alert.alert('Reported', 'Thank you. Our team will review.');
+        return;
+      } catch (e) {
+        console.log('[Chat] report error', e);
+      }
+    }
+    Alert.alert('Reported', 'We have recorded your report locally.');
+  }, [usingFirebase]);
+
+  const blockUser = useCallback(async (matchId: string) => {
+    setBlocked((prev) => ({ ...prev, [matchId]: true }));
+    try {
+      await AsyncStorage.setItem(STORAGE_BLOCKED, JSON.stringify({ ...blocked, [matchId]: true }));
+    } catch (e) {
+      console.log('[Chat] block persist error', e);
+    }
+    Alert.alert('Blocked', 'You will no longer receive messages from this match.');
+  }, [blocked]);
+
+  const simulateIncoming = useCallback(async (matchId: string, text: string) => {
+    if (usingFirebase && firebaseRefs.current.db) {
+      try {
+        const db = firebaseRefs.current.db;
+        const colRef = collection(db, 'chats', matchId, 'messages');
+        await addDoc(colRef, {
+          type: 'text',
+          text,
+          sender: 'match',
+          createdAt: serverTimestamp(),
+          readBy: [],
+          status: 'sent',
+        });
+        return;
+      } catch (e) {
+        console.log('[Chat] simulateIncoming firebase error', e);
+      }
+    }
+    const msg: ChatMessage = {
+      id: String(Date.now()),
+      matchId,
+      type: 'text',
+      text,
+      sender: 'match',
+      createdAt: Date.now(),
+      status: 'delivered',
+      readBy: [],
+    };
+    appendMessage(matchId, msg);
+  }, [usingFirebase, appendMessage]);
 
   const value: ChatContextType = useMemo(() => ({
     getMessages,
@@ -220,7 +508,13 @@ export const [ChatProvider, useChat] = createContextHook<ChatContextType>(() => 
     sendImage,
     sendVideo,
     subscribe,
-  }), [getMessages, sendText, sendImage, sendVideo, subscribe]);
+    isTyping,
+    setTyping,
+    reportUser,
+    blockUser,
+    usingFirebase,
+    simulateIncoming,
+  }), [getMessages, sendText, sendImage, sendVideo, subscribe, isTyping, setTyping, reportUser, blockUser, usingFirebase, simulateIncoming]);
 
   return value;
 });

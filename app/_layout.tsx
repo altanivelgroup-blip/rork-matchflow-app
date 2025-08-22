@@ -17,6 +17,7 @@ import { NotificationsProvider } from "@/contexts/NotificationsContext";
 import { AnalyticsProvider } from "@/contexts/AnalyticsContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import AppSplashScreen from "@/components/SplashScreen";
+import "@/lib/consoleTap";
 
 const RootLayoutNav = React.memo(function RootLayoutNav() {
   return (
@@ -62,6 +63,12 @@ const RootLayoutNav = React.memo(function RootLayoutNav() {
         name="match-animations-test"
         options={{
           title: "Match Animations Test",
+        }}
+      />
+      <Stack.Screen
+        name="diagnostics-report"
+        options={{
+          title: "Diagnostics",
         }}
       />
     </Stack>

@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
   PanResponder,
   Animated,
   Image,
@@ -11,6 +10,7 @@ import {
   Platform,
   ActivityIndicator,
   Modal,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -28,11 +28,14 @@ import UpgradeModal from "@/components/UpgradeModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { backend } from "@/lib/backend";
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
-const SWIPE_THRESHOLD = screenWidth * 0.25;
-
 export default function DiscoverScreen() {
   const [currentIndex, setCurrentIndex] = useState<number>(0);
+  const { width, height } = useWindowDimensions();
+  const isTablet = Math.min(width, height) >= 768;
+  const cardWidth = isTablet ? Math.min(520, width * 0.5) : width - 40;
+  const cardHeight = isTablet ? Math.min(720, height * 0.75) : height * 0.65;
+  const SWIPE_THRESHOLD = width * 0.25;
+
   const position = useRef(new Animated.ValueXY()).current;
   const { addMatch } = useMatches();
   const { user } = useAuth();
@@ -148,25 +151,25 @@ export default function DiscoverScreen() {
   }, [currentIndex, orderedProfiles, tEnabled, translate]);
 
   const rotate = position.x.interpolate({
-    inputRange: [-screenWidth / 2, 0, screenWidth / 2],
+    inputRange: [-width / 2, 0, width / 2],
     outputRange: ["-10deg", "0deg", "10deg"],
     extrapolate: "clamp",
   });
 
   const likeOpacity = position.x.interpolate({
-    inputRange: [0, screenWidth / 4],
+    inputRange: [0, width / 4],
     outputRange: [0, 1],
     extrapolate: "clamp",
   });
 
   const nopeOpacity = position.x.interpolate({
-    inputRange: [-screenWidth / 4, 0],
+    inputRange: [-width / 4, 0],
     outputRange: [1, 0],
     extrapolate: "clamp",
   });
 
   const nextCardScale = position.x.interpolate({
-    inputRange: [-screenWidth / 2, 0, screenWidth / 2],
+    inputRange: [-width / 2, 0, width / 2],
     outputRange: [1, 0.95, 1],
     extrapolate: "clamp",
   });
@@ -202,7 +205,7 @@ export default function DiscoverScreen() {
       backend.recordPass(uid, profile.id).catch((e) => console.log('[Discover] pass error', e));
     }
     Animated.timing(position, {
-      toValue: { x: -screenWidth * 1.5, y: 0 },
+      toValue: { x: -width * 1.5, y: 0 },
       duration: 250,
       useNativeDriver: false,
     }).start(() => nextCard());
@@ -265,7 +268,7 @@ export default function DiscoverScreen() {
     }
 
     Animated.timing(position, {
-      toValue: { x: screenWidth * 1.5, y: 0 },
+      toValue: { x: width * 1.5, y: 0 },
       duration: 250,
       useNativeDriver: false,
     }).start(() => nextCard());
@@ -307,6 +310,7 @@ export default function DiscoverScreen() {
           key={profile.id}
           style={[
             styles.card,
+            { width: cardWidth, height: cardHeight },
             {
               transform: [
                 { translateX: position.x },
@@ -399,6 +403,7 @@ export default function DiscoverScreen() {
         key={profile.id}
         style={[
           styles.card,
+          { width: cardWidth, height: cardHeight },
           {
             transform: [{ scale: nextCardScale }],
           },
@@ -447,7 +452,7 @@ export default function DiscoverScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, isTablet ? { alignItems: 'center' } : null]}>
         <Text style={styles.headerTitle}>MatchFlow</Text>
         {limits.dailySwipes != null ? (
           <View style={styles.swipePill} testID="swipe-counter">
@@ -495,7 +500,7 @@ export default function DiscoverScreen() {
         );
       })()}
 
-      <View style={styles.cardsContainer}>
+      <View style={[styles.cardsContainer, isTablet ? { paddingVertical: 24 } : null]} testID={isTablet ? 'layout-tablet' : 'layout-phone'}>
         {deck
           .slice(currentIndex, currentIndex + 2)
           .reverse()
@@ -613,6 +618,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F5F5F5",
+    alignSelf: 'stretch',
   },
   header: {
     paddingHorizontal: 20,
@@ -674,8 +680,6 @@ const styles = StyleSheet.create({
   },
   card: {
     position: "absolute",
-    width: screenWidth - 40,
-    height: screenHeight * 0.65,
     borderRadius: 20,
     backgroundColor: "#fff",
     shadowColor: "#000",

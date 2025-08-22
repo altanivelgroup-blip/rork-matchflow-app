@@ -60,6 +60,10 @@ export default function PermissionsPromptScreen() {
           [
             { text: t('common.cancel') ?? 'Cancel' },
             {
+              text: t('permissions.retryPermission') ?? 'Retry Permission',
+              onPress: () => handleRequestPermissions(),
+            },
+            {
               text: t('common.openSettings') ?? 'Open Settings',
               onPress: () => {
                 if (Platform.OS !== 'web') {
@@ -75,7 +79,10 @@ export default function PermissionsPromptScreen() {
       Alert.alert(
         t('common.error') ?? 'Error',
         t('permissions.requestError') ?? 'Failed to request camera permission. Please try again.',
-        [{ text: t('common.ok') ?? 'OK' }]
+        [
+          { text: t('common.ok') ?? 'OK' },
+          { text: t('permissions.retryPermission') ?? 'Retry Permission', onPress: () => handleRequestPermissions() }
+        ]
       );
     } finally {
       setIsRequesting(false);
@@ -85,7 +92,7 @@ export default function PermissionsPromptScreen() {
   const handleSkipForNow = () => {
     Alert.alert(
       t('permissions.skipTitle') ?? 'Skip Verification?',
-      t('permissions.skipMessage') ?? 'You can complete verification later, but some features may be limited until your account is verified.',
+      t('permissions.skipMessage') ?? 'You can complete verification later, but some features may be limited until your account is verified. Gallery access will be blocked until camera permission is granted.',
       [
         { text: t('common.cancel') ?? 'Cancel' },
         {
@@ -93,7 +100,7 @@ export default function PermissionsPromptScreen() {
           style: 'destructive',
           onPress: () => {
             analytics.track('verification_skipped');
-            router.push('/(auth)/profile-setup' as any);
+            router.push('/(auth)/verify-photo' as any); // Still go to verification but with limited access
           },
         },
       ]
@@ -203,7 +210,7 @@ export default function PermissionsPromptScreen() {
             <View style={styles.warningCard}>
               <AlertTriangle color="#F59E0B" size={16} />
               <Text style={styles.warningText}>
-                {t('permissions.warningText') ?? 'Unverified accounts have limited access to matches and messaging features.'}
+                {t('permissions.warningText') ?? 'Without camera permission: Gallery access blocked, verification limited, reduced matching features.'}
               </Text>
             </View>
           </View>

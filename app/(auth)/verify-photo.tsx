@@ -82,16 +82,23 @@ export default function VerifyPhotoScreen() {
   }, [uid]);
 
   const resetAll = useCallback(() => {
+    console.log('[VerifyPhoto] Resetting all state');
     setPhotos({ neutral: null, smile: null, sad: null });
     setCurrentExpr('neutral');
     setSecondsLeft(120);
     setExpiredPromptShown(false);
     setVerificationError(null);
     setVerifying(false);
+    setCameraError(null);
+    setCameraReady(false);
+    setShowCamera(false);
+    setIsPaused(false);
     verificationStartedAtRef.current = Date.now();
     captureGuardRef.current = { capturing: false };
     if (autoTimerRef.current) { clearTimeout(autoTimerRef.current); autoTimerRef.current = null; }
-  }, []);
+    if (cameraWatchdogRef.current) { clearTimeout(cameraWatchdogRef.current); cameraWatchdogRef.current = null; }
+    showToast(t('verification.stateReset') ?? 'Verification state reset. Ready to start fresh.');
+  }, [showToast, t]);
 
   useEffect(() => {
     if (secondsLeft === 0 && !expiredPromptShown) {
@@ -111,6 +118,7 @@ export default function VerifyPhotoScreen() {
     try {
       setIsRequestingPerms(true);
       setIsPaused(true);
+      setCameraError(null);
       
       // Check if we already have permission
       if (permission?.granted) {
@@ -132,7 +140,12 @@ export default function VerifyPhotoScreen() {
           title,
           message,
           [
-            { text: t('common.cancel') ?? 'Cancel' },
+            { text: t('common.cancel') ?? 'Cancel', onPress: () => {
+              showToast(t('verification.permissionDenied') ?? 'Camera permission denied. Gallery access blocked.');
+            }},
+            { text: t('verification.retryLater') ?? 'Retry Later', onPress: () => {
+              showToast(t('verification.retryPermissionLater') ?? 'You can retry camera permission later.');
+            }},
             { text: t('common.openSettings') ?? 'Open Settings', onPress: () => {
               if (Platform.OS !== 'web') {
                 Linking.openSettings();
@@ -147,17 +160,23 @@ export default function VerifyPhotoScreen() {
       return true;
     } catch (e) {
       console.log('[VerifyPhoto] perms error', e);
+      const errorMsg = t('verification.permissionError') ?? 'Failed to request camera permission. Please try again.';
+      setCameraError(errorMsg);
+      showToast(errorMsg);
       Alert.alert(
         t('common.error') ?? 'Error',
-        t('verification.permissionError') ?? 'Failed to request camera permission. Please try again.',
-        [{ text: t('common.ok') ?? 'OK' }]
+        errorMsg,
+        [
+          { text: t('common.ok') ?? 'OK' },
+          { text: t('verification.resetAndRetry') ?? 'Reset & Retry', onPress: resetAll }
+        ]
       );
       return false;
     } finally {
       setIsRequestingPerms(false);
       setIsPaused(false);
     }
-  }, [permission?.granted, requestPermission, t]);
+  }, [permission?.granted, requestPermission, t, showToast, resetAll]);
 
   const exprInstruction = useMemo(() => {
     if (currentExpr === 'neutral') return t('verification.exprNeutral') ?? 'Neutral face 😐 — look straight at the camera';
@@ -177,9 +196,17 @@ export default function VerifyPhotoScreen() {
 
   const openCamera = useCallback(async () => {
     console.log('[VerifyPhoto] Opening camera...');
+    
+    // Reset any previous errors
+    setCameraError(null);
+    setVerificationError(null);
+    
     const ok = await requestPermissions();
     if (!ok) {
-      console.log('[VerifyPhoto] Camera permission denied');
+      console.log('[VerifyPhoto] Camera permission denied - blocking gallery access');
+      const blockMsg = t('verification.galleryBlocked') ?? 'Gallery access blocked until camera permission is granted.';
+      setCameraError(blockMsg);
+      showToast(blockMsg);
       return;
     }
     
@@ -203,7 +230,11 @@ export default function VerifyPhotoScreen() {
             if (!single.ok) {
               const errorMsg = t('verification.faceRequired') ?? 'Face required';
               const errorDetail = single.reason ?? t('verification.oneFaceRequired') ?? 'Exactly one face must be visible.';
-              Alert.alert(errorMsg, errorDetail);
+              setCameraError(errorDetail);
+              Alert.alert(errorMsg, errorDetail, [
+                { text: t('common.ok') ?? 'OK' },
+                { text: t('verification.resetAndRetry') ?? 'Reset & Retry', onPress: resetAll }
+              ]);
               showToast(errorDetail);
             } else {
               let size: number | null = null;
@@ -220,8 +251,13 @@ export default function VerifyPhotoScreen() {
         }
       } catch (e) {
         console.log('[VerifyPhoto] Web camera error:', e);
-        Alert.alert(t('verification.cameraError') ?? 'Camera error', t('verification.cameraErrorDetail') ?? 'Unable to open camera. Try again.');
-        showToast(t('verification.cameraErrorDetail') ?? 'Unable to open camera. Try again.');
+        const errorMsg = t('verification.cameraErrorDetail') ?? 'Unable to open camera. Try again.';
+        setCameraError(errorMsg);
+        Alert.alert(t('verification.cameraError') ?? 'Camera error', errorMsg, [
+          { text: t('common.ok') ?? 'OK' },
+          { text: t('verification.resetAndRetry') ?? 'Reset & Retry', onPress: resetAll }
+        ]);
+        showToast(errorMsg);
       } finally {
         setIsPaused(false);
       }
@@ -235,22 +271,32 @@ export default function VerifyPhotoScreen() {
     setShowCamera(true);
     setIsPaused(true);
     captureGuardRef.current = { capturing: false };
-  }, [requestPermissions, currentExpr, t, showToast]);
+  }, [requestPermissions, currentExpr, t, showToast, resetAll]);
 
   const takeNowExpr = useCallback(async () => {
     try {
-      if (captureGuardRef.current.capturing) return;
+      if (captureGuardRef.current.capturing) {
+        console.log('[VerifyPhoto] Capture already in progress, ignoring');
+        return;
+      }
       captureGuardRef.current.capturing = true;
+      setCameraError(null);
+      
       const cam = cameraRef.current as unknown as { takePictureAsync?: (opts: { quality: number; skipProcessing: boolean }) => Promise<{ uri: string }> } | null;
       if (!cam || !cam.takePictureAsync) {
+        const errorMsg = t('verification.cameraNotReady') ?? 'Camera not ready. Please try again.';
+        setCameraError(errorMsg);
+        showToast(errorMsg);
         captureGuardRef.current.capturing = false;
         return;
       }
-      const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error('Capture timeout')), 4000));
+      
+      const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error('Capture timeout')), 6000));
       const photo = await Promise.race([
         cam.takePictureAsync({ quality: 1, skipProcessing: false }),
         timeout,
       ] as const);
+      
       let size: number | null = null;
       try {
         const info = await FileSystem.getInfoAsync((photo as { uri: string }).uri, { size: true });
@@ -259,17 +305,35 @@ export default function VerifyPhotoScreen() {
       } catch (e) {
         console.log('[VerifyPhoto] take picture size error', e);
       }
+      
+      // Verify the captured image has a face
+      const single = await verifySingleImage((photo as { uri: string }).uri);
+      if (!single.ok) {
+        const errorMsg = single.reason ?? t('verification.oneFaceRequired') ?? 'Exactly one face must be visible.';
+        setCameraError(errorMsg);
+        showToast(errorMsg);
+        captureGuardRef.current.capturing = false;
+        return;
+      }
+      
       setPhotos((prev) => ({ ...prev, [currentExpr]: { uri: (photo as { uri: string }).uri, capturedAt: Date.now(), byteSize: size } }));
       setShowCamera(false);
       setIsPaused(false);
       captureGuardRef.current = { capturing: false };
+      
+      // Auto-advance to next expression
       if (currentExpr === 'neutral') setCurrentExpr('smile');
       else if (currentExpr === 'smile') setCurrentExpr('sad');
+      
+      showToast(t('verification.captureSuccess') ?? 'Photo captured successfully!');
     } catch (e) {
       console.log('[VerifyPhoto] takeNow error', e);
-      setCameraError(t('verification.captureFailed') ?? 'Capture failed. Try again.');
-      showToast(t('verification.captureFailed') ?? 'Capture failed. Try again.');
-      captureGuardRef.current = { capturing: false };
+      const errorMsg = e instanceof Error && e.message === 'Capture timeout' 
+        ? (t('verification.captureTimeout') ?? 'Capture timed out. Camera may be frozen.')
+        : (t('verification.captureFailed') ?? 'Capture failed. Try again.');
+      setCameraError(errorMsg);
+      showToast(errorMsg);
+      captureGuardRef.current.capturing = false;
     }
   }, [currentExpr, showToast, t]);
 
@@ -450,52 +514,82 @@ export default function VerifyPhotoScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.captureButton, { backgroundColor: '#374151', marginTop: 10 }]}
+          style={[styles.captureButton, { backgroundColor: permission?.granted ? '#374151' : '#9CA3AF', marginTop: 10 }]}
           onPress={async () => {
+            if (!permission?.granted) {
+              const blockMsg = t('verification.galleryBlocked') ?? 'Gallery access blocked until camera permission is granted.';
+              setCameraError(blockMsg);
+              showToast(blockMsg);
+              Alert.alert(
+                t('verification.permissionRequired') ?? 'Permission Required',
+                blockMsg,
+                [
+                  { text: t('common.ok') ?? 'OK' },
+                  { text: t('verification.grantPermission') ?? 'Grant Permission', onPress: () => requestPermissions() }
+                ]
+              );
+              return;
+            }
+            
             setIsPaused(true);
-            await ImagePicker.requestCameraPermissionsAsync();
-            await (async () => {
-              try {
-                const result = await ImagePicker.launchCameraAsync({
-                  mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                  allowsEditing: true,
-                  aspect: [1, 1],
-                  quality: 1,
-                });
-                if (!result.canceled) {
-                  const asset = result.assets?.[0];
-                  if (asset?.uri) {
-                    const single = await verifySingleImage(asset.uri);
-                    if (!single.ok) {
-                      const errorMsg = t('verification.faceRequired') ?? 'Face required';
-                      const errorDetail = single.reason ?? t('verification.oneFaceRequired') ?? 'Exactly one face must be visible.';
-                      Alert.alert(errorMsg, errorDetail);
-                      showToast(errorDetail);
-                    } else {
-                      let size: number | null = null;
-                      try {
-                        const info = await FileSystem.getInfoAsync(asset.uri, { size: true });
-                        const s = (info as unknown as { size?: number }).size;
-                        size = typeof s === 'number' ? s : null;
-                      } catch {}
-                      setPhotos((prev) => ({ ...prev, [currentExpr]: { uri: asset.uri, capturedAt: Date.now(), byteSize: size } }));
-                      if (currentExpr === 'neutral') setCurrentExpr('smile');
-                      else if (currentExpr === 'smile') setCurrentExpr('sad');
-                    }
+            setCameraError(null);
+            
+            try {
+              const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 1,
+              });
+              if (!result.canceled) {
+                const asset = result.assets?.[0];
+                if (asset?.uri) {
+                  const single = await verifySingleImage(asset.uri);
+                  if (!single.ok) {
+                    const errorMsg = t('verification.faceRequired') ?? 'Face required';
+                    const errorDetail = single.reason ?? t('verification.oneFaceRequired') ?? 'Exactly one face must be visible.';
+                    setCameraError(errorDetail);
+                    Alert.alert(errorMsg, errorDetail, [
+                      { text: t('common.ok') ?? 'OK' },
+                      { text: t('verification.resetAndRetry') ?? 'Reset & Retry', onPress: resetAll }
+                    ]);
+                    showToast(errorDetail);
+                  } else {
+                    let size: number | null = null;
+                    try {
+                      const info = await FileSystem.getInfoAsync(asset.uri, { size: true });
+                      const s = (info as unknown as { size?: number }).size;
+                      size = typeof s === 'number' ? s : null;
+                    } catch {}
+                    setPhotos((prev) => ({ ...prev, [currentExpr]: { uri: asset.uri, capturedAt: Date.now(), byteSize: size } }));
+                    if (currentExpr === 'neutral') setCurrentExpr('smile');
+                    else if (currentExpr === 'smile') setCurrentExpr('sad');
+                    showToast(t('verification.captureSuccess') ?? 'Photo captured successfully!');
                   }
                 }
-              } catch (e) {
-                Alert.alert(t('verification.cameraError') ?? 'Camera error', t('verification.cameraErrorDetail') ?? 'Unable to open camera. Try again.');
-                showToast(t('verification.cameraErrorDetail') ?? 'Unable to open camera. Try again.');
-              } finally {
-                setIsPaused(false);
               }
-            })();
+            } catch (e) {
+              const errorMsg = t('verification.cameraErrorDetail') ?? 'Unable to open camera. Try again.';
+              setCameraError(errorMsg);
+              Alert.alert(t('verification.cameraError') ?? 'Camera error', errorMsg, [
+                { text: t('common.ok') ?? 'OK' },
+                { text: t('verification.resetAndRetry') ?? 'Reset & Retry', onPress: resetAll }
+              ]);
+              showToast(errorMsg);
+            } finally {
+              setIsPaused(false);
+            }
           }}
           testID="manual-capture"
+          disabled={!permission?.granted}
         >
           <CameraIcon color="#fff" size={20} />
-          <Text style={styles.captureText}>{t('verification.manualCapture') ?? 'Manual capture (fallback)'}</Text>
+          <Text style={styles.captureText}>
+            {permission?.granted 
+              ? (t('verification.manualCapture') ?? 'Manual capture (fallback)')
+              : (t('verification.permissionRequiredShort') ?? 'Permission required')
+            }
+          </Text>
           <ChevronRight color="#fff" size={18} />
         </TouchableOpacity>
 
@@ -527,6 +621,13 @@ export default function VerifyPhotoScreen() {
           )}
         </TouchableOpacity>
 
+        {cameraError ? (
+          <View style={styles.errorBanner}>
+            <AlertCircle color="#991b1b" size={16} />
+            <Text style={styles.errorText}>{cameraError}</Text>
+          </View>
+        ) : null}
+        
         {Platform.OS === 'web' ? (
           <Text style={styles.webHint} testID="web-hint">{t('verification.webHint') ?? 'Tip: On web, your browser may open a file dialog. Use your device camera if prompted.'}</Text>
         ) : null}

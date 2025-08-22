@@ -26,6 +26,7 @@ import UpgradeModal from '@/components/UpgradeModal';
 import { useAnalytics } from '@/contexts/AnalyticsContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { backend } from '@/lib/backend';
+import { PROMO_GRAPHICS } from '@/constants/promoGraphics';
 
 interface FilterOptions {
   verifiedOnly: boolean;
@@ -484,6 +485,15 @@ export default function GalleryScreen() {
         <View style={styles.aiLoadingOverlay}>
           <ActivityIndicator color="#EF4444" />
           <Text style={styles.aiLoadingText}>Personalizing your gallery...</Text>
+        </View>
+      )}
+      
+      {/* Gallery Header with Promo Graphic */}
+      {displayedProfiles.length === 0 && !aiQuery.isLoading && (
+        <View style={styles.emptyGallery}>
+          <Image source={{ uri: PROMO_GRAPHICS.gallery.collage }} style={styles.promoImage} />
+          <Text style={styles.emptyTitle}>Discover Amazing People</Text>
+          <Text style={styles.emptySubtitle}>Your perfect matches are waiting to be found</Text>
         </View>
       )}
       
@@ -977,5 +987,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#374151',
+  },
+  emptyGallery: {
+    alignItems: 'center',
+    padding: 40,
+    backgroundColor: '#fff',
+    margin: 16,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  promoImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 16,
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 24,
   },
 });

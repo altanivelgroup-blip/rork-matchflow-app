@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, Dimensions, Easing, Platform, StyleSheet, Text, View } from 'react-native';
+import { Animated, Dimensions, Easing, Platform, StyleSheet, Text, View, Image } from 'react-native';
+import { PROMO_GRAPHICS } from '@/constants/promoGraphics';
 
 export type CelebrationTheme = 'confetti' | 'hearts' | 'fireworks';
 
@@ -18,7 +19,7 @@ interface Particle {
   rotate: Animated.Value;
   opacity: Animated.Value;
   color: string;
-  kind: 'dot' | 'heart';
+  kind: 'dot' | 'heart' | 'firework';
   size: number;
 }
 
@@ -31,8 +32,8 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
   const particles = useMemo<Particle[]>(() => {
     const arr: Particle[] = [];
     for (let i = 0; i < count; i++) {
-      const kind: 'dot' | 'heart' = theme === 'hearts' ? 'heart' : 'dot';
-      const size = kind === 'heart' ? 16 + Math.random() * 14 : 6 + Math.random() * 8;
+      const kind: 'dot' | 'heart' | 'firework' = theme === 'hearts' ? 'heart' : theme === 'fireworks' ? 'firework' : 'dot';
+      const size = kind === 'heart' ? 16 + Math.random() * 14 : kind === 'firework' ? 20 + Math.random() * 16 : 6 + Math.random() * 8;
       arr.push({
         x: new Animated.Value(W / 2),
         y: new Animated.Value(H / 2),
@@ -96,6 +97,8 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
           <Animated.View key={`p-${i}`} style={[StyleSheet.absoluteFillObject, { transform }]}> 
             {p.kind === 'heart' ? (
               <Text style={{ fontSize: p.size, color: p.color, lineHeight: p.size as number, textAlign: 'center' }}>❤</Text>
+            ) : p.kind === 'firework' ? (
+              <Text style={{ fontSize: p.size, lineHeight: p.size as number, textAlign: 'center' }}>✨</Text>
             ) : (
               <View style={[style as unknown as object, { borderRadius: p.size / 2 }]} />
             )}
@@ -103,6 +106,12 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
         );
       })}
       <Animated.View style={[styles.centerLabel, { opacity: labelOpacity, transform: [{ translateY: labelY }] }]}> 
+        {theme === 'fireworks' && (
+          <Image 
+            source={{ uri: PROMO_GRAPHICS.matchCelebration.fireworks }} 
+            style={styles.celebrationImage}
+          />
+        )}
         <Text style={styles.title} accessibilityRole="header">{message}</Text>
       </Animated.View>
     </View>
@@ -125,6 +134,7 @@ function pickColor(theme: CelebrationTheme): string {
 const styles = StyleSheet.create({
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   particle: { backgroundColor: '#FF6B6B' },
-  centerLabel: { position: 'absolute', top: H / 2 - 80, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, backgroundColor: 'rgba(17,24,39,0.6)' },
+  centerLabel: { position: 'absolute', top: H / 2 - 80, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, backgroundColor: 'rgba(17,24,39,0.6)', alignItems: 'center' },
   title: { color: '#fff', fontSize: 20, fontWeight: '900', textAlign: 'center' },
+  celebrationImage: { width: 40, height: 40, marginBottom: 8, opacity: 0.8 },
 });

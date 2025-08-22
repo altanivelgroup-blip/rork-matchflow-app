@@ -31,6 +31,7 @@ import { useDreamDate, type DreamDateScenario, type DreamDateSession } from '@/c
 import { useMatches } from '@/contexts/MatchContext';
 import { useMembership } from '@/contexts/MembershipContext';
 import UpgradeModal from '@/components/UpgradeModal';
+import { PROMO_GRAPHICS } from '@/constants/promoGraphics';
 
 export default function DreamDateSimulator() {
   const { matchId } = useLocalSearchParams<{ matchId: string }>();
@@ -309,6 +310,13 @@ export default function DreamDateSimulator() {
               ))}
             </View>
           </View>
+        </View>
+
+        {/* AI Dream Date Promo */}
+        <View style={styles.promoSection}>
+          <Image source={{ uri: PROMO_GRAPHICS.aiDreamDate.simulator }} style={styles.promoImage} />
+          <Text style={styles.promoTitle}>AI-Powered Virtual Dating</Text>
+          <Text style={styles.promoSubtitle}>Experience personalized date scenarios with advanced AI</Text>
         </View>
 
         {/* Scenarios */}
@@ -971,5 +979,37 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  promoSection: {
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#fff',
+    margin: 20,
+    marginTop: 0,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  promoImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 16,
+    marginBottom: 16,
+  },
+  promoTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  promoSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 22,
   },
 });

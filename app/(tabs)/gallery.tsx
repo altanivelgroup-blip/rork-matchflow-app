@@ -10,6 +10,7 @@ import {
   Modal,
   useWindowDimensions,
   RefreshControl,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Heart, X, Filter, Star, MessageCircle, Verified } from 'lucide-react-native';
@@ -35,106 +36,169 @@ interface FilterOptions {
   minCompatibility: number;
 }
 
-interface ProfileCardProps {
+interface HexProfileCardProps {
   profile: MockProfile;
   aiScore?: number;
   onLike: (profile: MockProfile) => void;
   onPass: (profile: MockProfile) => void;
-  isTablet: boolean;
+  size: number;
   translatedBio?: string;
   translatedInterests?: string[];
   showTranslatedNote?: boolean;
+  index: number;
 }
 
-const ProfileCard: React.FC<ProfileCardProps> = ({
+interface HexGridRowProps {
+  profiles: MockProfile[];
+  aiScores: Record<string, number>;
+  onLike: (profile: MockProfile) => void;
+  onPass: (profile: MockProfile) => void;
+  hexSize: number;
+  tMap: Record<string, { bio?: string; interests?: string[]; bioTranslated: boolean; interestsTranslated: boolean }>;
+  tEnabled: boolean;
+  rowIndex: number;
+}
+
+const HexProfileCard: React.FC<HexProfileCardProps> = ({
   profile,
   aiScore,
   onLike,
   onPass,
-  isTablet,
+  size,
   translatedBio,
   translatedInterests,
   showTranslatedNote,
+  index,
 }) => {
-  const cardWidth = isTablet ? 280 : '48%';
-  const cardHeight = isTablet ? 380 : 320;
-  
   const displayBio = translatedBio || profile.bio;
   const displayInterests = translatedInterests || profile.interests;
-  const bioSnippet = displayBio.length > 60 ? `${displayBio.substring(0, 60)}...` : displayBio;
+  const bioSnippet = displayBio.length > 40 ? `${displayBio.substring(0, 40)}...` : displayBio;
+
+  // Create hexagon path
+  const hexPath = `M${size * 0.5},${size * 0.067} L${size * 0.933},${size * 0.25} L${size * 0.933},${size * 0.75} L${size * 0.5},${size * 0.933} L${size * 0.067},${size * 0.75} L${size * 0.067},${size * 0.25} Z`;
 
   return (
-    <View style={[styles.profileCard, { width: cardWidth, height: cardHeight }]} testID={`profile-card-${profile.id}`}>
+    <View 
+      style={[
+        styles.hexContainer, 
+        { 
+          width: size, 
+          height: size,
+          marginBottom: index % 2 === 0 ? -size * 0.25 : 0,
+        }
+      ]} 
+      testID={`hex-card-${profile.id}`}
+    >
       <TouchableOpacity
-        style={styles.cardImageContainer}
+        style={[styles.hexagonCard, { width: size, height: size }]}
         onPress={() => router.push(`/profile/${profile.id}` as any)}
-        testID={`profile-image-${profile.id}`}
+        testID={`hex-profile-${profile.id}`}
       >
-        <Image source={{ uri: profile.image }} style={styles.cardImage} />
+        {/* Hexagon Background */}
+        <View style={[styles.hexagonBackground, { width: size, height: size }]}>
+          <Image 
+            source={{ uri: profile.image }} 
+            style={[styles.hexImage, { width: size * 0.9, height: size * 0.9 }]} 
+          />
+        </View>
         
-        {/* AI Recommendation Badge */}
-        {aiScore && aiScore >= 70 && (
-          <View style={styles.aiRecommendationBadge} testID={`ai-badge-${profile.id}`}>
-            <Star size={12} color="#065F46" fill="#065F46" />
-            <Text style={styles.aiRecommendationText}>AI Match</Text>
-          </View>
-        )}
+        {/* Overlay Content */}
+        <View style={styles.hexOverlay}>
+          {/* AI Recommendation Badge */}
+          {aiScore && aiScore >= 70 && (
+            <View style={styles.hexAiBadge} testID={`hex-ai-badge-${profile.id}`}>
+              <Star size={8} color="#065F46" fill="#065F46" />
+            </View>
+          )}
+          
+          {/* Verified Badge */}
+          {profile.faceScoreFromVerification && profile.faceScoreFromVerification > 0.8 && (
+            <View style={styles.hexVerifiedBadge} testID={`hex-verified-${profile.id}`}>
+              <Verified size={10} color="#2563EB" fill="#2563EB" />
+            </View>
+          )}
+          
+          {/* Compatibility Score */}
+          {aiScore && (
+            <View style={styles.hexCompatibilityBadge} testID={`hex-compatibility-${profile.id}`}>
+              <Text style={styles.hexCompatibilityText}>{Math.round(aiScore)}%</Text>
+            </View>
+          )}
+        </View>
         
-        {/* Verified Badge */}
-        {profile.faceScoreFromVerification && profile.faceScoreFromVerification > 0.8 && (
-          <View style={styles.verifiedBadge} testID={`verified-${profile.id}`}>
-            <Verified size={16} color="#2563EB" fill="#2563EB" />
-          </View>
-        )}
-        
-        {/* Compatibility Score */}
-        {aiScore && (
-          <View style={styles.compatibilityBadge} testID={`compatibility-${profile.id}`}>
-            <Text style={styles.compatibilityText}>{Math.round(aiScore)}%</Text>
-          </View>
-        )}
+        {/* Bottom Info */}
+        <View style={styles.hexInfo}>
+          <Text style={styles.hexName} numberOfLines={1}>
+            {profile.name}, {profile.age}
+          </Text>
+          <Text style={styles.hexBio} numberOfLines={1}>
+            {bioSnippet}
+          </Text>
+          
+          {showTranslatedNote && (
+            <Text style={styles.hexTranslatedNote} testID={`hex-translated-${profile.id}`}>
+              AI
+            </Text>
+          )}
+        </View>
       </TouchableOpacity>
       
-      <View style={styles.cardContent}>
-        <Text style={styles.cardName} numberOfLines={1}>
-          {profile.name}, {profile.age}
-        </Text>
-        <Text style={styles.cardBio} numberOfLines={2}>
-          {bioSnippet}
-        </Text>
+      {/* Action Buttons */}
+      <View style={styles.hexActions}>
+        <TouchableOpacity
+          style={[styles.hexActionButton, styles.hexPassButton]}
+          onPress={() => onPass(profile)}
+          testID={`hex-pass-${profile.id}`}
+        >
+          <X size={14} color="#EF4444" />
+        </TouchableOpacity>
         
-        {showTranslatedNote && (
-          <Text style={styles.translatedNote} testID={`translated-${profile.id}`}>
-            Translated by AI
-          </Text>
-        )}
-        
-        <View style={styles.interestsContainer}>
-          {displayInterests.slice(0, 2).map((interest, index) => (
-            <View key={index} style={styles.interestTag}>
-              <Text style={styles.interestText} numberOfLines={1}>{interest}</Text>
-            </View>
-          ))}
-        </View>
-        
-        <View style={styles.cardActions}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.passButton]}
-            onPress={() => onPass(profile)}
-            testID={`pass-${profile.id}`}
-          >
-            <X size={20} color="#EF4444" />
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[styles.actionButton, styles.likeButton]}
-            onPress={() => onLike(profile)}
-            testID={`like-${profile.id}`}
-          >
-            <Heart size={20} color="#EF4444" fill="#EF4444" />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={[styles.hexActionButton, styles.hexLikeButton]}
+          onPress={() => onLike(profile)}
+          testID={`hex-like-${profile.id}`}
+        >
+          <Heart size={14} color="#EF4444" fill="#EF4444" />
+        </TouchableOpacity>
       </View>
+    </View>
+  );
+};
+
+const HexGridRow: React.FC<HexGridRowProps> = ({
+  profiles,
+  aiScores,
+  onLike,
+  onPass,
+  hexSize,
+  tMap,
+  tEnabled,
+  rowIndex,
+}) => {
+  const isEvenRow = rowIndex % 2 === 0;
+  const offset = isEvenRow ? 0 : hexSize * 0.433;
+  
+  return (
+    <View style={[styles.hexRow, { marginLeft: offset }]}>
+      {profiles.map((profile, index) => {
+        const t = tMap[profile.id];
+        const showTranslatedNote = tEnabled && ((t?.bioTranslated ?? false) || (t?.interestsTranslated ?? false));
+        
+        return (
+          <HexProfileCard
+            key={profile.id}
+            profile={profile}
+            aiScore={aiScores[profile.id]}
+            onLike={onLike}
+            onPass={onPass}
+            size={hexSize}
+            translatedBio={tEnabled && t?.bio ? t.bio : undefined}
+            translatedInterests={tEnabled && t?.interests ? t.interests : undefined}
+            showTranslatedNote={showTranslatedNote}
+            index={index}
+          />
+        );
+      })}
     </View>
   );
 };
@@ -142,7 +206,8 @@ const ProfileCard: React.FC<ProfileCardProps> = ({
 export default function GalleryScreen() {
   const { width } = useWindowDimensions();
   const isTablet = Math.min(width, 768) >= 768;
-  const numColumns = isTablet ? 3 : 2;
+  const hexesPerRow = isTablet ? 3 : 2;
+  const hexSize = Math.min((width - 40) / hexesPerRow * 0.9, 140);
   
   const [filters, setFilters] = useState<FilterOptions>({
     verifiedOnly: false,
@@ -260,11 +325,28 @@ export default function GalleryScreen() {
     return filtered;
   }, [mockProfiles, aiQuery.data, filters, likedIds, passedIds]);
   
-  // Paginated profiles for infinite scroll
+  // Paginated profiles for infinite scroll with hexagon rows
   const displayedProfiles = useMemo(() => {
-    const itemsPerPage = 10;
+    const itemsPerPage = hexesPerRow * 4; // 4 rows at a time
     return filteredProfiles.slice(0, page * itemsPerPage);
-  }, [filteredProfiles, page]);
+  }, [filteredProfiles, page, hexesPerRow]);
+  
+  // Group profiles into rows for hexagon grid
+  const hexRows = useMemo(() => {
+    const rows: MockProfile[][] = [];
+    for (let i = 0; i < displayedProfiles.length; i += hexesPerRow) {
+      rows.push(displayedProfiles.slice(i, i + hexesPerRow));
+    }
+    return rows;
+  }, [displayedProfiles, hexesPerRow]);
+  
+  // AI scores map for performance
+  const aiScoresMap = useMemo(() => {
+    const scores = aiQuery.data?.scores ?? [];
+    const scoreMap: Record<string, number> = {};
+    scores.forEach(s => scoreMap[s.id] = s.score);
+    return scoreMap;
+  }, [aiQuery.data]);
   
   // Translation preloading
   useEffect(() => {
@@ -416,21 +498,17 @@ export default function GalleryScreen() {
     setRefreshing(false);
   }, [aiQuery]);
   
-  const renderProfile = ({ item }: { item: MockProfile }) => {
-    const aiScore = aiQuery.data?.scores?.find(s => s.id === item.id)?.score;
-    const t = tMap[item.id];
-    const showTranslatedNote = tEnabled && ((t?.bioTranslated ?? false) || (t?.interestsTranslated ?? false));
-    
+  const renderHexRow = ({ item, index }: { item: MockProfile[]; index: number }) => {
     return (
-      <ProfileCard
-        profile={item}
-        aiScore={aiScore}
+      <HexGridRow
+        profiles={item}
+        aiScores={aiScoresMap}
         onLike={handleLike}
         onPass={handlePass}
-        isTablet={isTablet}
-        translatedBio={tEnabled && t?.bio ? t.bio : undefined}
-        translatedInterests={tEnabled && t?.interests ? t.interests : undefined}
-        showTranslatedNote={showTranslatedNote}
+        hexSize={hexSize}
+        tMap={tMap}
+        tEnabled={tEnabled}
+        rowIndex={index}
       />
     );
   };
@@ -497,21 +575,29 @@ export default function GalleryScreen() {
         </View>
       )}
       
-      {/* Profiles Grid */}
+      {/* Hexagon Profiles Grid */}
       <FlatList
-        data={displayedProfiles}
-        renderItem={renderProfile}
-        keyExtractor={(item) => item.id}
-        numColumns={numColumns}
-        contentContainerStyle={styles.gridContainer}
-        columnWrapperStyle={numColumns > 1 ? styles.row : undefined}
+        data={hexRows}
+        renderItem={renderHexRow}
+        keyExtractor={(item, index) => `row-${index}`}
+        contentContainerStyle={styles.hexGridContainer}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
         ListFooterComponent={renderFooter}
-        testID="profiles-grid"
+        showsVerticalScrollIndicator={false}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={4}
+        windowSize={10}
+        initialNumToRender={6}
+        getItemLayout={(data, index) => ({
+          length: hexSize * 0.75,
+          offset: hexSize * 0.75 * index,
+          index,
+        })}
+        testID="hex-profiles-grid"
       />
       
       {/* Filter Modal */}
@@ -686,53 +772,58 @@ const styles = StyleSheet.create({
     color: '#DC2626',
     fontWeight: '600',
   },
-  gridContainer: {
-    padding: 16,
-    gap: 16,
+  hexGridContainer: {
+    padding: 20,
+    paddingBottom: 40,
   },
-  row: {
-    justifyContent: 'space-between',
-    paddingHorizontal: 0,
+  hexRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: -20,
   },
-  profileCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-    overflow: 'hidden',
+  hexContainer: {
+    alignItems: 'center',
+    marginHorizontal: 4,
   },
-  cardImageContainer: {
+  hexagonCard: {
     position: 'relative',
-    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  cardImage: {
-    width: '100%',
-    height: '100%',
+  hexagonBackground: {
+    position: 'absolute',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    transform: [{ rotate: '30deg' }],
+  },
+  hexImage: {
+    borderRadius: 18,
     resizeMode: 'cover',
   },
-  aiRecommendationBadge: {
+  hexOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 2,
+  },
+  hexAiBadge: {
     position: 'absolute',
     top: 8,
     left: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
     backgroundColor: '#ECFDF5',
     borderWidth: 1,
     borderColor: '#A7F3D0',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    padding: 4,
+    borderRadius: 8,
   },
-  aiRecommendationText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#065F46',
-  },
-  verifiedBadge: {
+  hexVerifiedBadge: {
     position: 'absolute',
     top: 8,
     right: 8,
@@ -742,77 +833,80 @@ const styles = StyleSheet.create({
     padding: 4,
     borderRadius: 8,
   },
-  compatibilityBadge: {
+  hexCompatibilityBadge: {
+    position: 'absolute',
+    bottom: 40,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  hexCompatibilityText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  hexInfo: {
     position: 'absolute',
     bottom: 8,
+    left: 8,
     right: 8,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    alignItems: 'center',
+    zIndex: 3,
   },
-  compatibilityText: {
+  hexName: {
+    fontSize: 12,
+    fontWeight: '700',
     color: '#fff',
-    fontSize: 12,
-    fontWeight: '700',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
-  cardContent: {
-    padding: 12,
-  },
-  cardName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  cardBio: {
-    fontSize: 14,
-    color: '#6B7280',
-    lineHeight: 20,
-    marginBottom: 8,
-  },
-  translatedNote: {
+  hexBio: {
     fontSize: 10,
-    color: '#059669',
-    fontWeight: '600',
-    marginBottom: 8,
+    color: '#fff',
+    textAlign: 'center',
+    marginTop: 2,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
-  interestsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 12,
+  hexTranslatedNote: {
+    fontSize: 8,
+    color: '#10B981',
+    fontWeight: '700',
+    marginTop: 2,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
   },
-  interestTag: {
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    maxWidth: '48%',
-  },
-  interestText: {
-    fontSize: 12,
-    color: '#374151',
-    fontWeight: '600',
-  },
-  cardActions: {
+  hexActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 8,
     gap: 8,
   },
-  actionButton: {
-    flex: 1,
-    height: 36,
-    borderRadius: 18,
+  hexActionButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  passButton: {
+  hexPassButton: {
     backgroundColor: '#FEF2F2',
     borderColor: '#FECACA',
   },
-  likeButton: {
+  hexLikeButton: {
     backgroundColor: '#FEF2F2',
     borderColor: '#FECACA',
   },

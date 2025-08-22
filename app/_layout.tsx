@@ -71,6 +71,12 @@ const RootLayoutNav = React.memo(function RootLayoutNav() {
           title: "Diagnostics",
         }}
       />
+      <Stack.Screen
+        name="diagnostic-test"
+        options={{
+          title: "Diagnostic Test",
+        }}
+      />
     </Stack>
   );
 });

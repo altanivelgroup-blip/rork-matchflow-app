@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,9 +11,12 @@ import {
   useWindowDimensions,
   RefreshControl,
   ScrollView,
+  Animated,
+  Easing,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Heart, X, Filter, Star, MessageCircle, Verified } from 'lucide-react-native';
+import { Heart, X, Filter, Star, MessageCircle, Verified, Sparkles } from 'lucide-react-native';
 import { mockProfiles, type MockProfile } from '@/mocks/profiles';
 import { router } from 'expo-router';
 import MatchCelebration from '@/components/MatchCelebration';
@@ -46,6 +49,7 @@ interface HexProfileCardProps {
   translatedInterests?: string[];
   showTranslatedNote?: boolean;
   index: number;
+  isProcessing?: boolean;
 }
 
 interface HexGridRowProps {
@@ -57,6 +61,7 @@ interface HexGridRowProps {
   tMap: Record<string, { bio?: string; interests?: string[]; bioTranslated: boolean; interestsTranslated: boolean }>;
   tEnabled: boolean;
   rowIndex: number;
+  processingIds: Set<string>;
 }
 
 const HexProfileCard: React.FC<HexProfileCardProps> = ({
@@ -69,30 +74,142 @@ const HexProfileCard: React.FC<HexProfileCardProps> = ({
   translatedInterests,
   showTranslatedNote,
   index,
+  isProcessing = false,
 }) => {
   const displayBio = translatedBio || profile.bio;
   const displayInterests = translatedInterests || profile.interests;
   const bioSnippet = displayBio.length > 40 ? `${displayBio.substring(0, 40)}...` : displayBio;
 
+  // Animation values
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const likeButtonScale = useRef(new Animated.Value(1)).current;
+  const passButtonScale = useRef(new Animated.Value(1)).current;
+  const sparkleOpacity = useRef(new Animated.Value(0)).current;
+
+  // Animate card interactions
+  const animateCardPress = useCallback(() => {
+    Animated.sequence([
+      Animated.timing(scaleAnim, {
+        toValue: 0.95,
+        duration: 100,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 150,
+        easing: Easing.out(Easing.back(1.2)),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [scaleAnim]);
+
+  const animateButtonPress = useCallback((buttonAnim: Animated.Value, callback: () => void) => {
+    Animated.sequence([
+      Animated.timing(buttonAnim, {
+        toValue: 0.8,
+        duration: 100,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(buttonAnim, {
+        toValue: 1.1,
+        duration: 150,
+        easing: Easing.out(Easing.back(2)),
+        useNativeDriver: true,
+      }),
+      Animated.timing(buttonAnim, {
+        toValue: 1,
+        duration: 100,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start(() => callback());
+  }, []);
+
+  const showSparkles = useCallback(() => {
+    Animated.sequence([
+      Animated.timing(sparkleOpacity, {
+        toValue: 1,
+        duration: 200,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(sparkleOpacity, {
+        toValue: 0,
+        duration: 800,
+        delay: 300,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [sparkleOpacity]);
+
+  // Pulse animation for high compatibility
+  useEffect(() => {
+    if (aiScore && aiScore >= 85) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.05,
+            duration: 1000,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1000,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ]),
+        { iterations: -1 }
+      );
+      pulse.start();
+      return () => pulse.stop();
+    }
+  }, [aiScore, pulseAnim]);
+
+  const handleLike = useCallback(() => {
+    if (isProcessing) return;
+    showSparkles();
+    animateButtonPress(likeButtonScale, () => onLike(profile));
+  }, [isProcessing, showSparkles, animateButtonPress, likeButtonScale, onLike, profile]);
+
+  const handlePass = useCallback(() => {
+    if (isProcessing) return;
+    animateButtonPress(passButtonScale, () => onPass(profile));
+  }, [isProcessing, animateButtonPress, passButtonScale, onPass, profile]);
+
+  const handleCardPress = useCallback(() => {
+    animateCardPress();
+    router.push(`/profile/${profile.id}` as any);
+  }, [animateCardPress, profile.id]);
+
   // Create hexagon path
   const hexPath = `M${size * 0.5},${size * 0.067} L${size * 0.933},${size * 0.25} L${size * 0.933},${size * 0.75} L${size * 0.5},${size * 0.933} L${size * 0.067},${size * 0.75} L${size * 0.067},${size * 0.25} Z`;
 
   return (
-    <View 
+    <Animated.View 
       style={[
         styles.hexContainer, 
         { 
           width: size, 
           height: size,
           marginBottom: index % 2 === 0 ? -size * 0.25 : 0,
+          transform: [{ scale: scaleAnim }, { scale: pulseAnim }],
+          opacity: isProcessing ? 0.6 : 1,
         }
       ]} 
       testID={`hex-card-${profile.id}`}
     >
       <TouchableOpacity
         style={[styles.hexagonCard, { width: size, height: size }]}
-        onPress={() => router.push(`/profile/${profile.id}` as any)}
+        onPress={handleCardPress}
+        disabled={isProcessing}
         testID={`hex-profile-${profile.id}`}
+        activeOpacity={0.9}
       >
         {/* Hexagon Background */}
         <View style={[styles.hexagonBackground, { width: size, height: size }]}>
@@ -100,14 +217,21 @@ const HexProfileCard: React.FC<HexProfileCardProps> = ({
             source={{ uri: profile.image }} 
             style={[styles.hexImage, { width: size * 0.9, height: size * 0.9 }]} 
           />
+          
+          {/* Processing Overlay */}
+          {isProcessing && (
+            <View style={[styles.processingOverlay, { width: size * 0.9, height: size * 0.9 }]}>
+              <ActivityIndicator size="small" color="#EF4444" />
+            </View>
+          )}
         </View>
         
         {/* Overlay Content */}
         <View style={styles.hexOverlay}>
           {/* AI Recommendation Badge */}
           {aiScore && aiScore >= 70 && (
-            <View style={styles.hexAiBadge} testID={`hex-ai-badge-${profile.id}`}>
-              <Star size={8} color="#065F46" fill="#065F46" />
+            <View style={[styles.hexAiBadge, aiScore >= 85 && styles.hexAiBadgeHot]} testID={`hex-ai-badge-${profile.id}`}>
+              <Star size={8} color={aiScore >= 85 ? "#DC2626" : "#065F46"} fill={aiScore >= 85 ? "#DC2626" : "#065F46"} />
             </View>
           )}
           
@@ -118,10 +242,17 @@ const HexProfileCard: React.FC<HexProfileCardProps> = ({
             </View>
           )}
           
+          {/* Sparkles for high compatibility */}
+          {aiScore && aiScore >= 85 && (
+            <Animated.View style={[styles.hexSparkles, { opacity: sparkleOpacity }]} testID={`hex-sparkles-${profile.id}`}>
+              <Sparkles size={12} color="#F59E0B" />
+            </Animated.View>
+          )}
+          
           {/* Compatibility Score */}
           {aiScore && (
-            <View style={styles.hexCompatibilityBadge} testID={`hex-compatibility-${profile.id}`}>
-              <Text style={styles.hexCompatibilityText}>{Math.round(aiScore)}%</Text>
+            <View style={[styles.hexCompatibilityBadge, aiScore >= 85 && styles.hexCompatibilityBadgeHot]} testID={`hex-compatibility-${profile.id}`}>
+              <Text style={[styles.hexCompatibilityText, aiScore >= 85 && styles.hexCompatibilityTextHot]}>{Math.round(aiScore)}%</Text>
             </View>
           )}
         </View>
@@ -145,23 +276,42 @@ const HexProfileCard: React.FC<HexProfileCardProps> = ({
       
       {/* Action Buttons */}
       <View style={styles.hexActions}>
-        <TouchableOpacity
-          style={[styles.hexActionButton, styles.hexPassButton]}
-          onPress={() => onPass(profile)}
-          testID={`hex-pass-${profile.id}`}
-        >
-          <X size={14} color="#EF4444" />
-        </TouchableOpacity>
+        <Animated.View style={{ transform: [{ scale: passButtonScale }] }}>
+          <TouchableOpacity
+            style={[styles.hexActionButton, styles.hexPassButton, isProcessing && styles.hexActionButtonDisabled]}
+            onPress={handlePass}
+            disabled={isProcessing}
+            testID={`hex-pass-${profile.id}`}
+            activeOpacity={0.7}
+          >
+            <X size={14} color={isProcessing ? "#9CA3AF" : "#EF4444"} />
+          </TouchableOpacity>
+        </Animated.View>
         
-        <TouchableOpacity
-          style={[styles.hexActionButton, styles.hexLikeButton]}
-          onPress={() => onLike(profile)}
-          testID={`hex-like-${profile.id}`}
-        >
-          <Heart size={14} color="#EF4444" fill="#EF4444" />
-        </TouchableOpacity>
+        <Animated.View style={{ transform: [{ scale: likeButtonScale }] }}>
+          <TouchableOpacity
+            style={[styles.hexActionButton, styles.hexLikeButton, isProcessing && styles.hexActionButtonDisabled]}
+            onPress={handleLike}
+            disabled={isProcessing}
+            testID={`hex-like-${profile.id}`}
+            activeOpacity={0.7}
+          >
+            <Heart size={14} color={isProcessing ? "#9CA3AF" : "#EF4444"} fill={isProcessing ? "transparent" : "#EF4444"} />
+          </TouchableOpacity>
+        </Animated.View>
       </View>
-    </View>
+      
+      {/* Sparkle Animation Overlay */}
+      <Animated.View 
+        style={[styles.sparkleOverlay, { opacity: sparkleOpacity }]} 
+        pointerEvents="none"
+        testID={`hex-sparkle-overlay-${profile.id}`}
+      >
+        <Text style={styles.sparkleEmoji}>✨</Text>
+        <Text style={[styles.sparkleEmoji, { top: 20, left: 30 }]}>💖</Text>
+        <Text style={[styles.sparkleEmoji, { top: 40, right: 20 }]}>✨</Text>
+      </Animated.View>
+    </Animated.View>
   );
 };
 
@@ -174,6 +324,7 @@ const HexGridRow: React.FC<HexGridRowProps> = ({
   tMap,
   tEnabled,
   rowIndex,
+  processingIds,
 }) => {
   const isEvenRow = rowIndex % 2 === 0;
   const offset = isEvenRow ? 0 : hexSize * 0.433;
@@ -196,6 +347,7 @@ const HexGridRow: React.FC<HexGridRowProps> = ({
             translatedInterests={tEnabled && t?.interests ? t.interests : undefined}
             showTranslatedNote={showTranslatedNote}
             index={index}
+            isProcessing={processingIds.has(profile.id)}
           />
         );
       })}
@@ -225,6 +377,7 @@ export default function GalleryScreen() {
   const [celebration, setCelebration] = useState<{ visible: boolean; intensity: number; theme: 'confetti' | 'hearts' | 'fireworks'; message: string }>({ visible: false, intensity: 0.7, theme: 'hearts', message: "Boom! It's a Match!" });
   const [animationsEnabled, setAnimationsEnabled] = useState<boolean>(true);
   const [showUpgrade, setShowUpgrade] = useState<boolean>(false);
+  const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   
   const { addMatch } = useMatches();
   const analytics = useAnalytics();
@@ -429,6 +582,13 @@ export default function GalleryScreen() {
       return;
     }
     
+    if (processingIds.has(profile.id)) {
+      return;
+    }
+    
+    // Add to processing set
+    setProcessingIds(prev => new Set([...prev, profile.id]));
+    
     try {
       await incSwipe();
       
@@ -453,7 +613,15 @@ export default function GalleryScreen() {
         
         if (animationsEnabled) {
           const score = aiQuery.data?.scores?.find(s => s.id === profile.id)?.score ?? 65;
-          openCelebration(score, profile.name);
+          // Use fireworks for high compatibility matches
+          const theme = score >= 80 ? 'fireworks' : score >= 60 ? 'hearts' : 'confetti';
+          setCelebration({ 
+            visible: true, 
+            intensity: Math.max(0.5, Math.min(1, score / 100)), 
+            theme, 
+            message: `🎉 Perfect Match with ${profile.name}!` 
+          });
+          setTimeout(() => setCelebration(c => ({ ...c, visible: false })), 3000);
         }
         
         setMatchModal({ visible: true, profile });
@@ -461,14 +629,30 @@ export default function GalleryScreen() {
       }
     } catch (e) {
       console.log('[Gallery] like error', e);
+    } finally {
+      // Remove from processing set after a delay to show the animation
+      setTimeout(() => {
+        setProcessingIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(profile.id);
+          return newSet;
+        });
+      }, 500);
     }
-  }, [canSwipe, incSwipe, user?.email, likedIds, addMatch, animationsEnabled, aiQuery.data]);
+  }, [canSwipe, incSwipe, user?.email, likedIds, addMatch, animationsEnabled, aiQuery.data, processingIds]);
   
   const handlePass = useCallback(async (profile: MockProfile) => {
     if (!canSwipe) {
       setShowUpgrade(true);
       return;
     }
+    
+    if (processingIds.has(profile.id)) {
+      return;
+    }
+    
+    // Add to processing set
+    setProcessingIds(prev => new Set([...prev, profile.id]));
     
     try {
       await incSwipe();
@@ -482,8 +666,17 @@ export default function GalleryScreen() {
       await persistPassed(newPassed);
     } catch (e) {
       console.log('[Gallery] pass error', e);
+    } finally {
+      // Remove from processing set after a delay
+      setTimeout(() => {
+        setProcessingIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(profile.id);
+          return newSet;
+        });
+      }, 300);
     }
-  }, [canSwipe, incSwipe, user?.email, passedIds]);
+  }, [canSwipe, incSwipe, user?.email, passedIds, processingIds]);
   
   const handleLoadMore = useCallback(() => {
     if (displayedProfiles.length < filteredProfiles.length) {
@@ -509,6 +702,7 @@ export default function GalleryScreen() {
         tMap={tMap}
         tEnabled={tEnabled}
         rowIndex={index}
+        processingIds={processingIds}
       />
     );
   };
@@ -823,6 +1017,16 @@ const styles = StyleSheet.create({
     padding: 4,
     borderRadius: 8,
   },
+  hexAiBadgeHot: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  hexSparkles: {
+    position: 'absolute',
+    top: 8,
+    right: 30,
+    zIndex: 10,
+  },
   hexVerifiedBadge: {
     position: 'absolute',
     top: 8,
@@ -842,10 +1046,19 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 8,
   },
+  hexCompatibilityBadgeHot: {
+    backgroundColor: 'rgba(239,68,68,0.9)',
+  },
   hexCompatibilityText: {
     color: '#fff',
     fontSize: 10,
     fontWeight: '700',
+  },
+  hexCompatibilityTextHot: {
+    color: '#FFF',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   hexInfo: {
     position: 'absolute',
@@ -909,6 +1122,34 @@ const styles = StyleSheet.create({
   hexLikeButton: {
     backgroundColor: '#FEF2F2',
     borderColor: '#FECACA',
+  },
+  hexActionButtonDisabled: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#D1D5DB',
+  },
+  processingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 5,
+  },
+  sparkleOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 10,
+  },
+  sparkleEmoji: {
+    position: 'absolute',
+    fontSize: 16,
+    top: 10,
+    left: 10,
   },
   footerContainer: {
     padding: 20,

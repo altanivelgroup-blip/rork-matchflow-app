@@ -1,15 +1,22 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, Platform, StyleSheet, Text, View, Image } from 'react-native';
 import { PROMO_GRAPHICS } from '@/constants/promoGraphics';
+import * as Haptics from 'expo-haptics';
+import { Audio, AVPlaybackStatusSuccess } from 'expo-av';
+import LottieView from 'lottie-react-native';
 
 export type CelebrationTheme = 'confetti' | 'hearts' | 'fireworks';
 
 export interface MatchCelebrationProps {
   visible: boolean;
   onDone?: () => void;
-  intensity?: number; // 0..1 controls number of particles and duration
+  intensity?: number;
   theme?: CelebrationTheme;
   message?: string;
+  volume?: number;
+  soundEnabled?: boolean;
+  vibrate?: boolean;
+  lottieUrl?: string;
 }
 
 interface Particle {
@@ -25,7 +32,12 @@ interface Particle {
 
 const { width: W, height: H } = Dimensions.get('window');
 
-export default function MatchCelebration({ visible, onDone, intensity = 1, theme = 'hearts', message = "Boom! It's a Match!" }: MatchCelebrationProps) {
+const DEFAULT_FIREWORKS_JSON = 'https://assets8.lottiefiles.com/packages/lf20_pzud6sat.json';
+const ALT_FIREWORKS_JSON = 'https://assets8.lottiefiles.com/packages/lf20_kyi6f3u3.json';
+const SOUND_BOOM = 'https://assets.mixkit.co/active_storage/sfx/2560/2560-preview.mp3';
+const SOUND_POP = 'https://assets.mixkit.co/active_storage/sfx/2561/2561-preview.mp3';
+
+export default function MatchCelebration({ visible, onDone, intensity = 1, theme = 'hearts', message = "Boom! It's a Match!", volume = 0.8, soundEnabled = true, vibrate = true, lottieUrl }: MatchCelebrationProps) {
   const count = Math.max(12, Math.floor(80 * Math.max(0, Math.min(1, intensity))));
   const duration = 900 + Math.floor(1200 * intensity);
 
@@ -46,11 +58,26 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
       });
     }
     return arr;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [count, theme, visible]);
 
   const labelOpacity = useRef(new Animated.Value(0)).current;
   const labelY = useRef(new Animated.Value(20)).current;
+
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const [lottieReady, setLottieReady] = useState<boolean>(false);
+
+  useEffect(() => {
+    return () => {
+      try {
+        if (soundRef.current) {
+          soundRef.current.unloadAsync();
+          soundRef.current = null;
+        }
+      } catch (e) {
+        console.log('[MatchCelebration] unload sound error', e);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!visible) return;
@@ -81,15 +108,81 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
       Animated.timing(labelY, { toValue: -16, duration: 260, delay: Math.max(600, duration - 200), easing: Easing.in(Easing.quad), useNativeDriver: false }),
     ]);
 
+    const startEverything = async () => {
+      try {
+        if (vibrate) {
+          if (Platform.OS !== 'web') await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          else if (typeof navigator !== 'undefined' && 'vibrate' in navigator) (navigator as any).vibrate?.(60);
+        }
+        if (soundEnabled) {
+          if (Platform.OS !== 'web') {
+            await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false, staysActiveInBackground: false });
+            if (soundRef.current) {
+              await soundRef.current.unloadAsync();
+              soundRef.current = null;
+            }
+            const isHuge = intensity >= 0.9;
+            const { sound } = await Audio.Sound.createAsync({ uri: isHuge ? SOUND_BOOM : SOUND_POP }, { volume: Math.max(0, Math.min(1, volume)), shouldPlay: true });
+            soundRef.current = sound;
+            sound.setOnPlaybackStatusUpdate((s) => {
+              const st = s as AVPlaybackStatusSuccess;
+              if (st.isLoaded && st.didJustFinish) {
+                sound.unloadAsync().catch(() => {});
+                soundRef.current = null;
+              }
+            });
+          } else {
+            try {
+              const isHuge = intensity >= 0.9;
+              const audio = createWebAudio(isHuge ? SOUND_BOOM : SOUND_POP);
+              audio.volume = Math.max(0, Math.min(1, volume));
+              audio.play().catch((e: unknown) => console.log('[MatchCelebration] web audio play err', e));
+            } catch (err) {
+              console.log('[MatchCelebration] web audio error', err);
+            }
+          }
+        }
+      } catch (e) {
+        console.log('[MatchCelebration] startEverything error', e);
+      }
+    };
+
+    startEverything();
+
     Animated.sequence([showLabel, Animated.parallel(anims), hideLabel]).start(({ finished }) => {
       if (finished && onDone) onDone();
     });
-  }, [visible, particles, duration, labelOpacity, labelY, onDone]);
+  }, [visible, particles, duration, labelOpacity, labelY, onDone, vibrate, soundEnabled, volume, intensity]);
 
   if (!visible) return null;
 
+  const scaled = 0.6 + intensity * 0.8;
+  const jsonUrl = lottieUrl ?? (intensity >= 0.9 ? DEFAULT_FIREWORKS_JSON : ALT_FIREWORKS_JSON);
+
   return (
     <View pointerEvents="none" style={styles.overlay} testID="match-celebration">
+      {theme === 'fireworks' && Platform.OS !== 'web' ? (
+        <View style={StyleSheet.absoluteFill}>
+          <View style={[styles.lottieBurst, { transform: [{ scale: scaled }], top: H * 0.25 - 80 }]}>
+            <LottieView
+              source={{ uri: jsonUrl }}
+              autoPlay
+              loop={false}
+              onAnimationFinish={() => setLottieReady(true)}
+              style={{ width: W, height: 200 }}
+            />
+          </View>
+          <View style={[styles.lottieBurst, { transform: [{ scale: Math.max(0.5, scaled - 0.2) }], top: H * 0.55 - 60 }]}>
+            <LottieView source={{ uri: jsonUrl }} autoPlay loop={false} style={{ width: W, height: 180 }} />
+          </View>
+          {intensity >= 0.9 ? (
+            <View style={[styles.lottieBurst, { transform: [{ scale: scaled + 0.2 }], top: H * 0.4 - 100 }]}>
+              <LottieView source={{ uri: jsonUrl }} autoPlay loop={false} style={{ width: W, height: 220 }} />
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
       {particles.map((p, i) => {
         const transform = [{ translateX: p.x }, { translateY: p.y }, { rotate: p.rotate.interpolate({ inputRange: [0, 360], outputRange: ['0deg', '360deg'] }) }, { scale: p.scale }];
         const style = [styles.particle, { backgroundColor: p.kind === 'dot' ? p.color : 'transparent', width: p.size, height: p.size, opacity: p.opacity } as const];
@@ -105,6 +198,7 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
           </Animated.View>
         );
       })}
+
       <Animated.View style={[styles.centerLabel, { opacity: labelOpacity, transform: [{ translateY: labelY }] }]}> 
         {theme === 'fireworks' && (
           <Image 
@@ -131,10 +225,19 @@ function pickColor(theme: CelebrationTheme): string {
   return confetti[Math.floor(Math.random() * confetti.length)] as string;
 }
 
+// Web audio helper
+function createWebAudio(src: string) {
+  if (Platform.OS === 'web' && typeof (window as any)?.Audio !== 'undefined') {
+    return new (window as any).Audio(src);
+  }
+  throw new Error('Audio not supported');
+}
+
 const styles = StyleSheet.create({
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   particle: { backgroundColor: '#FF6B6B' },
   centerLabel: { position: 'absolute', top: H / 2 - 80, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, backgroundColor: 'rgba(17,24,39,0.6)', alignItems: 'center' },
   title: { color: '#fff', fontSize: 20, fontWeight: '900', textAlign: 'center' },
   celebrationImage: { width: 40, height: 40, marginBottom: 8, opacity: 0.8 },
+  lottieBurst: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
 });

@@ -10,6 +10,7 @@
         "@react-navigation/native": "^7.1.6",
         "@tanstack/react-query": "^5.83.0",
         "expo": "^53.0.4",
+        "expo-av": "~15.1.7",
         "expo-blur": "~14.1.4",
         "expo-camera": "~16.1.11",
         "expo-constants": "~17.1.4",
@@ -31,6 +32,7 @@
         "expo-web-browser": "~14.1.6",
         "firebase": "^12.1.0",
         "i18n-js": "^4.5.1",
+        "lottie-react-native": "7.2.2",
         "lucide-react-native": "^0.475.0",
         "nativewind": "^4.1.23",
         "react": "19.0.0",
@@ -1018,6 +1020,8 @@
 
     "expo-asset": ["expo-asset@11.1.4", "", { "dependencies": { "@expo/image-utils": "^0.7.4", "expo-constants": "~17.1.4" }, "peerDependencies": { "expo": "*", "react": "*", "react-native": "*" } }, "sha512-e3210sF0YHKRTCjVUOVmDAJ0Dk4vepL9RocKe36S7S+VthoCZwsBGLAM2LLvBa1SdmODF92AS0Nrcfi/1/VlbQ=="],
 
+    "expo-av": ["expo-av@15.1.7", "", { "peerDependencies": { "expo": "*", "react": "*", "react-native": "*", "react-native-web": "*" }, "optionalPeers": ["react-native-web"] }, "sha512-NC+JR+65sxXfQN1mOHp3QBaXTL2J+BzNwVO27XgUEc5s9NaoBTdHWElYXrfxvik6xwytZ+a7abrqfNNgsbQzsA=="],
+
     "expo-blur": ["expo-blur@14.1.4", "", { "peerDependencies": { "expo": "*", "react": "*", "react-native": "*" } }, "sha512-55P9tK/RjJZEcu2tU7BqX3wmIOrGMOOkmHztJMMws+ZGHzvtjnPmT7dsQxhOU9vPj77oHnKetYHU2sik3iBcCw=="],
 
     "expo-camera": ["expo-camera@16.1.11", "", { "dependencies": { "invariant": "^2.2.4" }, "peerDependencies": { "expo": "*", "react": "*", "react-native": "*", "react-native-web": "*" }, "optionalPeers": ["react-native-web"] }, "sha512-etA5ZKoC6nPBnWWqiTmlX//zoFZ6cWQCCIdmpUHTGHAKd4qZNCkhPvBWbi8o32pDe57lix1V4+TPFgEcvPwsaA=="],
@@ -1397,6 +1401,8 @@
     "long": ["long@5.3.2", "", {}, "sha512-mNAgZ1GmyNhD7AuqnTG3/VQ26o760+ZYBPKjPvugO8+nLbYfX6TVpJPseBvopbdY+qpZ/lKUnmEc1LeZYS3QAA=="],
 
     "loose-envify": ["loose-envify@1.4.0", "", { "dependencies": { "js-tokens": "^3.0.0 || ^4.0.0" }, "bin": { "loose-envify": "cli.js" } }, "sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q=="],
+
+    "lottie-react-native": ["lottie-react-native@7.2.2", "", { "peerDependencies": { "@lottiefiles/dotlottie-react": "^0.6.5", "react": "*", "react-native": ">=0.46", "react-native-windows": ">=0.63.x" }, "optionalPeers": ["@lottiefiles/dotlottie-react", "react-native-windows"] }, "sha512-pp3dnFVFZlfZzIL5qKGXju2d6RfnYhPbb8xQL9dYqvPbPy2EbnK2aFlv6jAZLYh0QjUGPEmRAgAAnsOOtT+H9Q=="],
 
     "lowercase-keys": ["lowercase-keys@2.0.0", "", {}, "sha512-tqNXrS78oMOE73NMxK4EMLQsQowWf8jKooH9g7xPavRT706R6bkQJ6DY2Te7QukaZsulxa30wQ7bk0pm4XiHmA=="],
 

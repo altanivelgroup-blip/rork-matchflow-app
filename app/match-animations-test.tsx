@@ -40,6 +40,7 @@ export default function MatchAnimationsTest() {
 
   const [settingsEnabled, setSettingsEnabled] = useState<boolean>(true);
   const [settingsIntensity, setSettingsIntensity] = useState<number>(7);
+  const [volume, setVolume] = useState<number>(0.9);
 
   const addLog = useCallback((msg: string) => {
     const line = `[${new Date().toISOString()}] ${msg}`;
@@ -149,6 +150,20 @@ export default function MatchAnimationsTest() {
       </View>
 
       <View style={styles.configCard}>
+        <TouchableOpacity
+          onPress={() => {
+            const picked = mockProfiles[0];
+            setConfig((c) => ({ ...c, profile: picked, aiScore: 98, simulateMutual: true }));
+            setVisible(false);
+            setTimeout(() => setVisible(true), 16);
+            addLog('Tap-to-boom triggered (98%)');
+          }}
+          style={styles.tapBoom}
+          accessibilityRole="button"
+          testID="btn-tap-boom"
+        >
+          <Text style={styles.tapBoomText}>Tap here to trigger a BIG boom (98%)</Text>
+        </TouchableOpacity>
         <View style={styles.rowBetween}>
           <Text style={styles.cardTitle}>Selected</Text>
           {isInternational ? (
@@ -187,6 +202,15 @@ export default function MatchAnimationsTest() {
             <Gauge size={14} color="#10B981" />
             <Text style={styles.linkText}>Reload</Text>
           </TouchableOpacity>
+        </View>
+
+        <View style={styles.rowWrap}>
+          {[0.3, 0.6, 1].map((v) => (
+            <TouchableOpacity key={`vol-${v}`} style={[styles.pill, Math.abs(volume - v) < 0.01 && styles.pillActive]} onPress={() => setVolume(v)} accessibilityRole="button" testID={`pill-volume-${v}`}>
+              <Gauge size={14} color={Math.abs(volume - v) < 0.01 ? '#fff' : '#111827'} />
+              <Text style={[styles.pillText, Math.abs(volume - v) < 0.01 && styles.pillTextActive]}>Vol {Math.round(v*100)}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         <View style={styles.rowWrap}>
@@ -267,7 +291,12 @@ export default function MatchAnimationsTest() {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.listItem}
-            onPress={() => setConfig((c) => ({ ...c, profile: item }))}
+            onPress={() => {
+              setConfig((c) => ({ ...c, profile: item, aiScore: 95, simulateMutual: true }));
+              setVisible(false);
+              setTimeout(() => setVisible(true), 16);
+              addLog(`Clicked ${item.name} -> boom (95%)`);
+            }}
             accessibilityRole="button"
             testID={`profile-${item.id}`}
           >
@@ -293,6 +322,9 @@ export default function MatchAnimationsTest() {
         intensity={intensity}
         theme={config.theme}
         message={config.profile ? `It's a match with ${config.profile.name}!` : "It's a match!"}
+        volume={volume}
+        soundEnabled
+        vibrate
       />
 
       {/* Crash guard for web specific features */}
@@ -315,6 +347,8 @@ const styles = StyleSheet.create({
   smallMuted: { color: '#6B7280', fontSize: 12 },
   linkBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 9999, backgroundColor: '#E0F2FE' },
   linkText: { color: '#2563EB', fontWeight: '800' },
+  tapBoom: { backgroundColor: '#111827', padding: 12, borderRadius: 12, alignItems: 'center', marginBottom: 8 },
+  tapBoomText: { color: '#fff', fontWeight: '900' },
   selectedRow: { marginTop: 6 },
   selectedName: { fontSize: 14, color: '#111827', fontWeight: '700' },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 9999, backgroundColor: '#E5E7EB' },

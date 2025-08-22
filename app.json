@@ -24,7 +24,8 @@
         "NSLocationAlwaysUsageDescription": "Allow $(PRODUCT_NAME) to use your location.",
         "NSLocationWhenInUseUsageDescription": "Allow $(PRODUCT_NAME) to use your location.",
         "UIBackgroundModes": [
-          "location"
+          "location",
+          "audio"
         ]
       }
     },
@@ -46,7 +47,8 @@
         "ACCESS_BACKGROUND_LOCATION",
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.SCHEDULE_EXACT_ALARM",
-        "android.permission.VIBRATE"
+        "android.permission.VIBRATE",
+        "RECORD_AUDIO"
       ]
     },
     "web": {
@@ -85,6 +87,12 @@
             "./local/assets/notification_sound.wav"
           ],
           "enableBackgroundRemoteNotifications": false
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone"
         }
       ]
     ],

@@ -14,8 +14,12 @@ import {
   Animated,
   Easing,
   Platform,
+  PanResponder,
+  GestureResponderEvent,
+  PanResponderGestureState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 import { Heart, X, Filter, Star, MessageCircle, Verified, Sparkles, MapPin, Shield, Moon, Sun, Sparkle, Eye } from 'lucide-react-native';
 import { mockProfiles, type MockProfile } from '@/mocks/profiles';
 import { router } from 'expo-router';
@@ -431,6 +435,9 @@ export default function GalleryScreen() {
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   const [previewMode, setPreviewMode] = useState<boolean>(false);
   const [previewProfile, setPreviewProfile] = useState<MockProfile | null>(null);
+  const [devBypass, setDevBypass] = useState<boolean>(true);
+  const [tempIntensity, setTempIntensity] = useState<number>(7);
+  const [devBarOpen, setDevBarOpen] = useState<boolean>(true);
   
   const { addMatch } = useMatches();
   const analytics = useAnalytics();
@@ -650,8 +657,43 @@ export default function GalleryScreen() {
     setTimeout(() => setCelebration(c => ({ ...c, visible: false })), 2000 + Math.floor(800 * intensity));
   };
 
+  const playClickFx = useCallback(async (kind: 'boom' | 'pop', intensityVal: number) => {
+    try {
+      const vol = Math.max(0.1, Math.min(1, intensityVal / 10));
+      if (Platform.OS === 'web') {
+        const url = kind === 'boom'
+          ? 'https://cdn.jsdelivr.net/gh/naptha/tinyfiles@main/sfx/boom.mp3'
+          : 'https://cdn.jsdelivr.net/gh/naptha/tinyfiles@main/sfx/pop.mp3';
+        const AudioCtor = (window as unknown as { Audio?: new (src?: string) => HTMLAudioElement }).Audio;
+        if (AudioCtor) {
+          const audio = new AudioCtor(url);
+          if (typeof audio.volume === 'number') audio.volume = vol;
+          await audio.play();
+        }
+      } else {
+        try {
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        } catch (e) {
+          console.log('[Gallery] haptics error', e);
+        }
+      }
+    } catch (e) {
+      console.log('[Gallery] playClickFx error', e);
+    }
+  }, []);
+
   const onPressCardGuarded = useCallback((profile: MockProfile) => {
     try {
+      if (devBypass) {
+        const score = aiScoresMap[profile.id] ?? profile.aiCompatibilityScore ?? 85;
+        const base = Math.max(0.3, Math.min(1, score / 100));
+        const userMul = Math.max(0.1, Math.min(1, tempIntensity / 10));
+        const intensity = Math.max(0.2, Math.min(1, base * userMul));
+        setCelebration({ visible: true, intensity, theme: 'fireworks', message: `Dev Match with ${profile.name}` });
+        setTimeout(() => setCelebration(c => ({ ...c, visible: false })), 2500);
+        void playClickFx(intensity > 0.7 ? 'boom' : 'pop', tempIntensity);
+        return;
+      }
       const isMatched = Boolean((useMatches as any) && false);
       if (previewMode) {
         setPreviewProfile(profile);
@@ -667,7 +709,7 @@ export default function GalleryScreen() {
     } catch (e) {
       console.log('[Gallery] onPressCardGuarded error', e);
     }
-  }, [previewMode]);
+  }, [devBypass, aiScoresMap, tempIntensity, previewMode]);
   
   const handleLike = useCallback(async (profile: MockProfile) => {
     if (!canSwipe) {
@@ -819,6 +861,50 @@ export default function GalleryScreen() {
     );
   };
   
+  const DevSlider: React.FC<{ value: number; onChange: (v: number) => void }> = ({ value, onChange }) => {
+    const trackWidth = useRef<number>(0);
+    const knobX = useRef(new Animated.Value(0)).current;
+    const baseXRef = useRef<number>(0);
+
+    useEffect(() => {
+      const pos = ((value - 1) / 9) * (Math.max(0, trackWidth.current - 24));
+      if (!isNaN(pos)) {
+        Animated.timing(knobX, { toValue: pos, duration: 120, easing: Easing.out(Easing.quad), useNativeDriver: false }).start();
+      }
+    }, [value, knobX]);
+
+    const getKnobValue = (): number => {
+      const anyVal = knobX as unknown as { __getValue?: () => number; _value?: number };
+      const v = typeof anyVal.__getValue === 'function' ? anyVal.__getValue() : anyVal._value ?? 0;
+      return typeof v === 'number' ? v : 0;
+    };
+
+    const pan = useRef(
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => { baseXRef.current = getKnobValue(); },
+        onPanResponderMove: (_: GestureResponderEvent, g: PanResponderGestureState) => {
+          const dx = Math.max(0, Math.min((Math.max(0, trackWidth.current - 24)), baseXRef.current + g.dx));
+          knobX.setValue(dx);
+          const denom = Math.max(1, trackWidth.current - 24);
+          const ratio = dx / denom;
+          const val = Math.round(1 + ratio * 9);
+          onChange(val);
+        },
+        onPanResponderRelease: () => {},
+        onPanResponderTerminationRequest: () => true,
+      })
+    ).current;
+
+    return (
+      <View style={styles.sliderRow} onLayout={(e) => { trackWidth.current = e.nativeEvent.layout.width; }}>
+        <View style={styles.sliderTrack} />
+        <Animated.View style={[styles.sliderKnob, { left: knobX }]} {...pan.panHandlers} testID="dev-slider-knob" />
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={[styles.container, darkMode && styles.containerDark]}>
       {/* Header */}
@@ -858,6 +944,18 @@ export default function GalleryScreen() {
             <Eye size={18} color={previewMode ? '#16A34A' : '#111827'} />
           </TouchableOpacity>
           <TouchableOpacity
+            style={[styles.filterButton, { marginLeft: 8, backgroundColor: devBypass ? '#E0E7FF' : '#F3F4F6', borderWidth: devBypass ? 1 : 0, borderColor: devBypass ? '#C7D2FE' : 'transparent' }]}
+            onPress={() => setDevBypass(v => !v)}
+            testID="toggle-dev-bypass"
+          >
+            <Sparkles size={18} color={devBypass ? '#3730A3' : '#111827'} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterButton, { marginLeft: 8 }]} onPress={() => setDevBarOpen(v => !v)} testID="toggle-devbar"
+          >
+            <Star size={18} color="#DC2626" />
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.filterButton, { marginLeft: 8 }]}
             onPress={() => {
               try {
@@ -877,6 +975,15 @@ export default function GalleryScreen() {
         </View>
       </View>
       
+      {/* Dev Tools Bar */}
+      {devBarOpen && (
+        <View style={styles.devBar} testID="devbar">
+          <Text style={styles.devBarText}>Intensity {tempIntensity}/10</Text>
+          <DevSlider value={tempIntensity} onChange={setTempIntensity} />
+          <Text style={styles.devBarHint}>Tap any profile image to trigger fireworks + sound</Text>
+        </View>
+      )}
+
       {/* AI Loading Overlay */}
       {aiQuery.isLoading && (
         <View style={[styles.aiLoadingOverlay, darkMode && styles.aiLoadingOverlayDark]}>
@@ -1660,4 +1767,10 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   emptySubtitleDark: { color: '#94A3B8' },
+  devBar: { flexDirection: 'column', gap: 6, marginHorizontal: 16, marginTop: 8, padding: 10, borderRadius: 10, backgroundColor: '#FFF1F2', borderWidth: 1, borderColor: '#FECACA' },
+  devBarText: { color: '#9F1239', fontWeight: '800' },
+  devBarHint: { color: '#9F1239', fontSize: 12 },
+  sliderRow: { position: 'relative', height: 28, justifyContent: 'center' },
+  sliderTrack: { position: 'absolute', left: 0, right: 0, height: 6, borderRadius: 9999, backgroundColor: '#FECACA' },
+  sliderKnob: { position: 'absolute', width: 24, height: 24, borderRadius: 12, backgroundColor: '#EF4444', top: 2 },
 });

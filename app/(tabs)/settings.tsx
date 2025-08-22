@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { Languages, ToggleLeft, ToggleRight, Crown, WifiOff, RefreshCw, CalendarX2, CreditCard, Globe, Webcam, Image as ImageIcon, Shuffle } from 'lucide-react-native';
+import { Languages, ToggleLeft, ToggleRight, Crown, WifiOff, RefreshCw, CalendarX2, CreditCard, Globe, Webcam, Image as ImageIcon, Shuffle, Sparkles } from 'lucide-react-native';
 import { useTranslate } from '@/contexts/TranslateContext';
 import { supportedLocales, SupportedLocale } from '@/lib/i18n';
 import { useMembership } from '@/contexts/MembershipContext';
@@ -329,6 +329,26 @@ export default function SettingsScreen() {
           </View>
         </View>
         <MembershipSection />
+      </View>
+
+      <View style={styles.card}>
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => {
+            try {
+              router.push('/dream-date-test');
+            } catch (e) {
+              console.log('[Settings] navigate dream date test error', e);
+            }
+          }}
+          testID="dream-date-test-link"
+        >
+          <View style={styles.rowLeft}>
+            <Sparkles color="#8B5CF6" size={20} />
+            <Text style={styles.rowTitle}>Dream Date Test</Text>
+          </View>
+        </TouchableOpacity>
+        <Text style={styles.note}>Test the AI Dream Date Simulator functionality</Text>
       </View>
 
       <View style={styles.tip}>

@@ -9,19 +9,25 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { MessageCircle, Languages } from "lucide-react-native";
+import { MessageCircle, Languages, Sparkles } from "lucide-react-native";
 import { useMatches } from "@/contexts/MatchContext";
 import { useTranslate } from "@/contexts/TranslateContext";
+import { useMembership } from "@/contexts/MembershipContext";
 
 export default function MatchesScreen() {
   const { matches } = useMatches();
   const { translate, targetLang, enabled } = useTranslate();
+  const { tier } = useMembership();
   const [translatedMap, setTranslatedMap] = useState<Record<string, { text: string; detected: string }>>({});
   const [showTranslated, setShowTranslated] = useState<Record<string, boolean>>({});
   const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
 
   const handleChatPress = (matchId: string) => {
     router.push(`/chat/${matchId}` as any);
+  };
+
+  const handleDreamDatePress = (matchId: string) => {
+    router.push(`/dream-date/${matchId}` as any);
   };
 
   const onTranslatePress = useCallback(async (id: string, bio: string) => {
@@ -75,9 +81,8 @@ export default function MatchesScreen() {
     const loading = loadingMap[item.id] ?? false;
     const bioToShow = showing && t && t !== item.bio ? t : item.bio;
     return (
-      <TouchableOpacity
+      <View
         style={styles.matchCard}
-        onPress={() => handleChatPress(item.id)}
         testID={`match-${item.id}`}
       >
         <Image source={{ uri: item.image }} style={styles.matchImage} />
@@ -100,8 +105,21 @@ export default function MatchesScreen() {
             ) : null}
           </View>
         </View>
-        <MessageCircle color="#FF6B6B" size={20} />
-      </TouchableOpacity>
+        <View style={styles.actionButtons}>
+          {tier === 'plus' && (
+            <TouchableOpacity
+              onPress={() => handleDreamDatePress(item.id)}
+              style={styles.dreamDateButton}
+              testID={`dream-date-${item.id}`}
+            >
+              <Sparkles color="#8B5CF6" size={16} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={() => handleChatPress(item.id)}>
+            <MessageCircle color="#FF6B6B" size={20} />
+          </TouchableOpacity>
+        </View>
+      </View>
     );
   };
 
@@ -211,6 +229,18 @@ const styles = StyleSheet.create({
   translateMeta: {
     fontSize: 10,
     color: '#6B7280',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  dreamDateButton: {
+    backgroundColor: '#F3F4F6',
+    padding: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   emptyContainer: {
     flex: 1,

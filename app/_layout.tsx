@@ -11,6 +11,7 @@ import { TranslateProvider } from "@/contexts/TranslateContext";
 import { MembershipProvider } from "@/contexts/MembershipContext";
 import { I18nProvider } from "@/contexts/I18nContext";
 import { ToastProvider } from "@/contexts/ToastContext";
+import { DreamDateProvider } from "@/contexts/DreamDateContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 const RootLayoutNav = React.memo(function RootLayoutNav() {
@@ -27,6 +28,18 @@ const RootLayoutNav = React.memo(function RootLayoutNav() {
             backgroundColor: "#fff",
           },
           headerTintColor: "#000",
+        }}
+      />
+      <Stack.Screen
+        name="dream-date/[matchId]"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="dream-date-test"
+        options={{
+          headerShown: false,
         }}
       />
     </Stack>
@@ -54,15 +67,17 @@ export default function RootLayout() {
             <MatchProvider>
               <MembershipProvider>
                 <TranslateProvider>
-                  <MediaProvider>
-                    <ChatProvider>
-                      <ToastProvider>
-                        <ErrorBoundary>
-                          <RootLayoutNav />
-                        </ErrorBoundary>
-                      </ToastProvider>
-                    </ChatProvider>
-                  </MediaProvider>
+                  <DreamDateProvider>
+                    <MediaProvider>
+                      <ChatProvider>
+                        <ToastProvider>
+                          <ErrorBoundary>
+                            <RootLayoutNav />
+                          </ErrorBoundary>
+                        </ToastProvider>
+                      </ChatProvider>
+                    </MediaProvider>
+                  </DreamDateProvider>
                 </TranslateProvider>
               </MembershipProvider>
             </MatchProvider>

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { Languages, ToggleLeft, ToggleRight, Crown, WifiOff, RefreshCw, CalendarX2, CreditCard, Globe, Webcam, Image as ImageIcon, Shuffle, Sparkles, Shield, ChevronRight, WalletCards, Bell } from 'lucide-react-native';
+import { Languages, ToggleLeft, ToggleRight, Crown, WifiOff, RefreshCw, CalendarX2, CreditCard, Globe, Webcam, Image as ImageIcon, Shuffle, Sparkles, Shield, ChevronRight, WalletCards, Bell, FileText } from 'lucide-react-native';
 import { useTranslate } from '@/contexts/TranslateContext';
 import { supportedLocales, SupportedLocale } from '@/lib/i18n';
 import { useMembership } from '@/contexts/MembershipContext';
@@ -223,7 +223,7 @@ export default function SettingsScreen() {
             <Text style={styles.rowTitle}>App Language</Text>
           </View>
         </View>
-        <View className="picker" style={styles.picker}>
+        <View style={styles.picker}>
           {entries.map(([code, label]) => {
             const active = locale === code;
             const flag = code === 'en' ? '🇺🇸' : code === 'es' ? '🇪🇸' : code === 'ja' ? '🇯🇵' : '🇨🇳';
@@ -390,6 +390,44 @@ export default function SettingsScreen() {
           </View>
         </View>
         <MembershipSection />
+      </View>
+
+      <View style={styles.card}>
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => {
+            try {
+              router.push('/legal/privacy');
+            } catch (e) {
+              console.log('[Settings] navigate privacy error', e);
+            }
+          }}
+          testID="open-privacy-from-settings"
+        >
+          <View style={styles.rowLeft}>
+            <Shield color="#10B981" size={20} />
+            <Text style={styles.rowTitle}>Privacy Policy</Text>
+          </View>
+          <ChevronRight color="#9CA3AF" size={20} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.row, { marginTop: 12 }]}
+          onPress={() => {
+            try {
+              router.push('/legal/terms');
+            } catch (e) {
+              console.log('[Settings] navigate terms error', e);
+            }
+          }}
+          testID="open-terms-from-settings"
+        >
+          <View style={styles.rowLeft}>
+            <FileText color="#111827" size={20} />
+            <Text style={styles.rowTitle}>Terms of Service</Text>
+          </View>
+          <ChevronRight color="#9CA3AF" size={20} />
+        </TouchableOpacity>
+        <Text style={styles.note}>Read our policies. A web version is available for sharing.</Text>
       </View>
 
       <View style={styles.card}>

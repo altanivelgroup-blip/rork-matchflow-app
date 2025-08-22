@@ -10,6 +10,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Linking,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -31,6 +32,7 @@ export default function SignupScreen() {
   const [showGenderPicker, setShowGenderPicker] = useState<boolean>(false);
   const [locationText, setLocationText] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
+  const [acceptedLegal, setAcceptedLegal] = useState<boolean>(false);
   const [pendingLocale, setPendingLocale] = useState<SupportedLocale | null>(null);
   const [confirmVisible, setConfirmVisible] = useState<boolean>(false);
   const { t, locale, setLocale } = useI18n();
@@ -88,6 +90,11 @@ export default function SignupScreen() {
       return;
     }
     
+    if (!acceptedLegal) {
+      Alert.alert(i18nProxy.t('legal.acceptRequiredTitle') ?? 'Accept required', i18nProxy.t('legal.acceptRequired') ?? 'You must accept the Terms of Service and Privacy Policy to continue.');
+      return;
+    }
+
     setLoading(true);
     await preflightLocation();
     try {
@@ -194,9 +201,25 @@ export default function SignupScreen() {
               </TouchableOpacity>
 
               <View style={styles.termsContainer}>
-                <Text style={styles.termsText}>
-                  By signing up, you agree to our <Text style={styles.termsLink}>Terms of Service</Text> and <Text style={styles.termsLink}>Privacy Policy</Text>
-                </Text>
+                <View style={styles.legalRow}>
+                  <TouchableOpacity onPress={() => router.push('/legal/terms' as any)} testID="open-terms">
+                    <Text style={styles.termsLink}>{(i18nProxy.t('legal.terms') ?? 'Terms of Service')}</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.termsSeparator}>•</Text>
+                  <TouchableOpacity onPress={() => router.push('/legal/privacy' as any)} testID="open-privacy">
+                    <Text style={styles.termsLink}>{(i18nProxy.t('legal.privacy') ?? 'Privacy Policy')}</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.termsSeparator}>•</Text>
+                  <TouchableOpacity onPress={() => Linking.openURL('https://example.com/legal')} testID="open-legal-web">
+                    <Text style={styles.termsLink}>{(i18nProxy.t('legal.webVersion') ?? 'Web version')}</Text>
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity style={styles.acceptRow} onPress={() => setAcceptedLegal(!acceptedLegal)} testID="accept-legal">
+                  <View style={[styles.checkbox, acceptedLegal && styles.checkboxChecked]} />
+                  <Text style={styles.acceptText}>
+                    {i18nProxy.t('legal.acceptText') ?? 'I have read and accept the Terms of Service and Privacy Policy.'}
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
           </ScrollView>
@@ -272,8 +295,13 @@ const styles = StyleSheet.create({
   signupDisabled: { opacity: 0.7 },
   signupButtonText: { color: "white", fontSize: 18, fontWeight: "600" },
   termsContainer: { marginTop: 20, paddingHorizontal: 10 },
-  termsText: { fontSize: 12, color: "#666", textAlign: "center", lineHeight: 18 },
-  termsLink: { color: "#FF6B6B", fontWeight: "600" },
+  legalRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
+  termsSeparator: { color: '#fff', opacity: 0.8 },
+  termsLink: { color: "#fff", fontWeight: "700", textDecorationLine: 'underline' },
+  acceptRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, justifyContent: 'center' },
+  checkbox: { width: 18, height: 18, borderRadius: 4, borderWidth: 2, borderColor: '#fff', backgroundColor: 'transparent' },
+  checkboxChecked: { backgroundColor: '#fff' },
+  acceptText: { fontSize: 12, color: '#fff', textAlign: 'center', flexShrink: 1 },
   modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
   modalContent: { backgroundColor: 'white', borderRadius: 20, padding: 20, width: '80%', maxWidth: 300 },
   modalTitle: { fontSize: 18, fontWeight: '600', color: '#333', textAlign: 'center', marginBottom: 20 },

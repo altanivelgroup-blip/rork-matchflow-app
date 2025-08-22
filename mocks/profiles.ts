@@ -9,6 +9,9 @@ export interface MockProfile {
   location?: { lat: number; lon: number; city?: string };
   faceVector?: number[];
   faceScoreFromVerification?: number;
+  aiCompatibilityScore?: number;
+  distanceFromUser?: number;
+  isVerified?: boolean;
 }
 
 export const mockProfiles: MockProfile[] = [
@@ -22,6 +25,9 @@ export const mockProfiles: MockProfile[] = [
     likedYou: true,
     location: { lat: 37.7749, lon: -122.4194, city: "San Francisco" },
     faceScoreFromVerification: 0.92,
+    aiCompatibilityScore: 89,
+    distanceFromUser: 12,
+    isVerified: true,
   },
   {
     id: "2",
@@ -33,6 +39,9 @@ export const mockProfiles: MockProfile[] = [
     likedYou: false,
     location: { lat: 34.0522, lon: -118.2437, city: "Los Angeles" },
     faceScoreFromVerification: 0.75,
+    aiCompatibilityScore: 72,
+    distanceFromUser: 347,
+    isVerified: false,
   },
   {
     id: "3",
@@ -44,6 +53,9 @@ export const mockProfiles: MockProfile[] = [
     likedYou: true,
     location: { lat: 37.3382, lon: -121.8863, city: "San Jose" },
     faceScoreFromVerification: 0.88,
+    aiCompatibilityScore: 94,
+    distanceFromUser: 45,
+    isVerified: true,
   },
   {
     id: "4",
@@ -54,6 +66,9 @@ export const mockProfiles: MockProfile[] = [
     interests: ["Fitness", "Dogs", "Traveling", "Sports"],
     likedYou: false,
     location: { lat: 36.1699, lon: -115.1398, city: "Las Vegas" },
+    aiCompatibilityScore: 67,
+    distanceFromUser: 270,
+    isVerified: false,
   },
   {
     id: "5",
@@ -65,6 +80,9 @@ export const mockProfiles: MockProfile[] = [
     likedYou: true,
     location: { lat: 37.8044, lon: -122.2712, city: "Oakland" },
     faceScoreFromVerification: 0.95,
+    aiCompatibilityScore: 91,
+    distanceFromUser: 8,
+    isVerified: true,
   },
   {
     id: "6",
@@ -75,6 +93,9 @@ export const mockProfiles: MockProfile[] = [
     interests: ["Technology", "Gaming", "Music", "Podcasts"],
     likedYou: false,
     location: { lat: 47.6062, lon: -122.3321, city: "Seattle" },
+    aiCompatibilityScore: 78,
+    distanceFromUser: 680,
+    isVerified: false,
   },
   {
     id: "7",
@@ -85,6 +106,9 @@ export const mockProfiles: MockProfile[] = [
     interests: ["Beach", "Photography", "Surfing", "Yoga"],
     likedYou: false,
     location: { lat: 32.7157, lon: -117.1611, city: "San Diego" },
+    aiCompatibilityScore: 83,
+    distanceFromUser: 460,
+    isVerified: false,
   },
   {
     id: "8",
@@ -96,5 +120,8 @@ export const mockProfiles: MockProfile[] = [
     likedYou: true,
     location: { lat: 40.7128, lon: -74.006, city: "New York" },
     faceScoreFromVerification: 0.83,
+    aiCompatibilityScore: 85,
+    distanceFromUser: 2570,
+    isVerified: true,
   },
 ];

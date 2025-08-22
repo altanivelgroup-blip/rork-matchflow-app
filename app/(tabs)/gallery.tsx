@@ -16,7 +16,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Heart, X, Filter, Star, MessageCircle, Verified, Sparkles } from 'lucide-react-native';
+import { Heart, X, Filter, Star, MessageCircle, Verified, Sparkles, MapPin, Shield } from 'lucide-react-native';
 import { mockProfiles, type MockProfile } from '@/mocks/profiles';
 import { router } from 'expo-router';
 import MatchCelebration from '@/components/MatchCelebration';
@@ -51,6 +51,22 @@ interface HexProfileCardProps {
   index: number;
   isProcessing?: boolean;
 }
+
+// Helper function to format distance
+const formatDistance = (miles: number): string => {
+  if (miles < 1) return '<1 mi';
+  if (miles < 10) return `${Math.round(miles)} mi`;
+  if (miles < 100) return `${Math.round(miles / 10) * 10} mi`;
+  return `${Math.round(miles / 100) * 100}+ mi`;
+};
+
+// Helper function to get compatibility color
+const getCompatibilityColor = (score: number): { bg: string; text: string; border: string } => {
+  if (score >= 90) return { bg: 'rgba(239,68,68,0.95)', text: '#FFF', border: '#DC2626' };
+  if (score >= 80) return { bg: 'rgba(245,158,11,0.9)', text: '#FFF', border: '#F59E0B' };
+  if (score >= 70) return { bg: 'rgba(16,185,129,0.9)', text: '#FFF', border: '#10B981' };
+  return { bg: 'rgba(0,0,0,0.8)', text: '#FFF', border: '#374151' };
+};
 
 interface HexGridRowProps {
   profiles: MockProfile[];
@@ -228,33 +244,55 @@ const HexProfileCard: React.FC<HexProfileCardProps> = ({
         
         {/* Overlay Content */}
         <View style={styles.hexOverlay}>
-          {/* AI Recommendation Badge */}
-          {aiScore && aiScore >= 70 && (
-            <View style={[styles.hexAiBadge, aiScore >= 85 && styles.hexAiBadgeHot]} testID={`hex-ai-badge-${profile.id}`}>
-              <Star size={8} color={aiScore >= 85 ? "#DC2626" : "#065F46"} fill={aiScore >= 85 ? "#DC2626" : "#065F46"} />
-            </View>
-          )}
-          
-          {/* Verified Badge */}
-          {profile.faceScoreFromVerification && profile.faceScoreFromVerification > 0.8 && (
-            <View style={styles.hexVerifiedBadge} testID={`hex-verified-${profile.id}`}>
-              <Verified size={10} color="#2563EB" fill="#2563EB" />
-            </View>
-          )}
+          {/* Top Row Badges */}
+          <View style={styles.hexTopBadges}>
+            {/* AI Recommendation Badge */}
+            {(aiScore ?? profile.aiCompatibilityScore) && (aiScore ?? profile.aiCompatibilityScore)! >= 70 && (
+              <View style={[styles.hexAiBadge, (aiScore ?? profile.aiCompatibilityScore)! >= 85 && styles.hexAiBadgeHot]} testID={`hex-ai-badge-${profile.id}`}>
+                <Star size={8} color={(aiScore ?? profile.aiCompatibilityScore)! >= 85 ? "#DC2626" : "#065F46"} fill={(aiScore ?? profile.aiCompatibilityScore)! >= 85 ? "#DC2626" : "#065F46"} />
+              </View>
+            )}
+            
+            {/* Facial Verification Badge */}
+            {(profile.isVerified || (profile.faceScoreFromVerification && profile.faceScoreFromVerification > 0.8)) && (
+              <View style={styles.hexVerifiedBadge} testID={`hex-verified-${profile.id}`}>
+                <Shield size={10} color="#2563EB" fill="#2563EB" />
+              </View>
+            )}
+          </View>
           
           {/* Sparkles for high compatibility */}
-          {aiScore && aiScore >= 85 && (
+          {(aiScore ?? profile.aiCompatibilityScore) && (aiScore ?? profile.aiCompatibilityScore)! >= 85 && (
             <Animated.View style={[styles.hexSparkles, { opacity: sparkleOpacity }]} testID={`hex-sparkles-${profile.id}`}>
               <Sparkles size={12} color="#F59E0B" />
             </Animated.View>
           )}
           
-          {/* Compatibility Score */}
-          {aiScore && (
-            <View style={[styles.hexCompatibilityBadge, aiScore >= 85 && styles.hexCompatibilityBadgeHot]} testID={`hex-compatibility-${profile.id}`}>
-              <Text style={[styles.hexCompatibilityText, aiScore >= 85 && styles.hexCompatibilityTextHot]}>{Math.round(aiScore)}%</Text>
-            </View>
-          )}
+          {/* Bottom Row Labels */}
+          <View style={styles.hexBottomLabels}>
+            {/* Distance Label */}
+            {profile.distanceFromUser != null && (
+              <View style={styles.hexDistanceBadge} testID={`hex-distance-${profile.id}`}>
+                <MapPin size={8} color="#FFF" />
+                <Text style={styles.hexDistanceText}>{formatDistance(profile.distanceFromUser)}</Text>
+              </View>
+            )}
+            
+            {/* AI Compatibility Score */}
+            {(aiScore ?? profile.aiCompatibilityScore) && (
+              <View 
+                style={[
+                  styles.hexCompatibilityBadge, 
+                  { backgroundColor: getCompatibilityColor(aiScore ?? profile.aiCompatibilityScore!).bg }
+                ]} 
+                testID={`hex-compatibility-${profile.id}`}
+              >
+                <Text style={[styles.hexCompatibilityText, { color: getCompatibilityColor(aiScore ?? profile.aiCompatibilityScore!).text }]}>
+                  {Math.round(aiScore ?? profile.aiCompatibilityScore!)}%
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
         
         {/* Bottom Info */}
@@ -385,30 +423,42 @@ export default function GalleryScreen() {
   const { enabled: tEnabled, translate, targetLang } = useTranslate();
   const { limits, canSwipe, swipeState, incSwipe } = useMembership();
   
-  // AI compatibility scoring
+  // AI compatibility scoring (fallback to mock data if AI service unavailable)
   const aiQuery = useQuery<{ scores: { id: string; score: number; reason: string }[] }, Error>({
     queryKey: ["aiMatch", user?.email ?? "guest"],
     queryFn: async () => {
-      const data = await scoreProfilesAgainstUser(
-        {
-          id: user?.email ?? "guest",
-          name: user?.name ?? "Guest",
-          age: user?.age,
-          bio: user?.bio,
-          interests: user?.interests,
-        },
-        mockProfiles.map((p) => ({
-          id: p.id,
-          name: p.name,
-          age: p.age,
-          bio: p.bio,
-          interests: [...p.interests],
-          location: p.location ? { lat: p.location.lat, lon: p.location.lon, city: p.location.city } : undefined,
-          faceVector: p.faceVector,
-          faceScoreFromVerification: p.faceScoreFromVerification,
-        })),
-      );
-      return data;
+      try {
+        const data = await scoreProfilesAgainstUser(
+          {
+            id: user?.email ?? "guest",
+            name: user?.name ?? "Guest",
+            age: user?.age,
+            bio: user?.bio,
+            interests: user?.interests,
+          },
+          mockProfiles.map((p) => ({
+            id: p.id,
+            name: p.name,
+            age: p.age,
+            bio: p.bio,
+            interests: [...p.interests],
+            location: p.location ? { lat: p.location.lat, lon: p.location.lon, city: p.location.city } : undefined,
+            faceVector: p.faceVector,
+            faceScoreFromVerification: p.faceScoreFromVerification,
+          })),
+        );
+        return data;
+      } catch (error) {
+        // Fallback to mock compatibility scores
+        console.log('[Gallery] AI scoring unavailable, using mock scores');
+        return {
+          scores: mockProfiles.map(p => ({
+            id: p.id,
+            score: p.aiCompatibilityScore ?? Math.floor(Math.random() * 40) + 60,
+            reason: 'Mock compatibility score'
+          }))
+        };
+      }
     },
     staleTime: 1000 * 60 * 10,
   });
@@ -493,11 +543,17 @@ export default function GalleryScreen() {
     return rows;
   }, [displayedProfiles, hexesPerRow]);
   
-  // AI scores map for performance
+  // AI scores map for performance (with fallback to profile data)
   const aiScoresMap = useMemo(() => {
     const scores = aiQuery.data?.scores ?? [];
     const scoreMap: Record<string, number> = {};
-    scores.forEach(s => scoreMap[s.id] = s.score);
+    
+    // Use AI scores if available, otherwise fallback to profile mock scores
+    mockProfiles.forEach(profile => {
+      const aiScore = scores.find(s => s.id === profile.id)?.score;
+      scoreMap[profile.id] = aiScore ?? profile.aiCompatibilityScore ?? 0;
+    });
+    
     return scoreMap;
   }, [aiQuery.data]);
   
@@ -1027,21 +1083,48 @@ const styles = StyleSheet.create({
     right: 30,
     zIndex: 10,
   },
-  hexVerifiedBadge: {
+  hexTopBadges: {
     position: 'absolute',
     top: 8,
+    left: 8,
     right: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    zIndex: 3,
+  },
+  hexVerifiedBadge: {
     backgroundColor: '#EFF6FF',
     borderWidth: 1,
     borderColor: '#BFDBFE',
     padding: 4,
     borderRadius: 8,
   },
-  hexCompatibilityBadge: {
+  hexBottomLabels: {
     position: 'absolute',
     bottom: 40,
+    left: 8,
     right: 8,
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    zIndex: 3,
+  },
+  hexDistanceBadge: {
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  hexDistanceText: {
+    color: '#FFF',
+    fontSize: 9,
+    fontWeight: '600',
+  },
+  hexCompatibilityBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 8,

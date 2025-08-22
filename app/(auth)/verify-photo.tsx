@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, ActivityIndicator, Modal, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Camera as CameraIcon, ArrowLeft, Timer as TimerIcon, RefreshCcw, CheckCircle2, ChevronRight, ShieldCheck, Crown, Webcam, AlertCircle, User, XCircle, Camera } from 'lucide-react-native';
@@ -110,10 +110,18 @@ export default function VerifyPhotoScreen() {
   const requestPermissions = useCallback(async () => {
     try {
       setIsRequestingPerms(true);
+      setIsPaused(true);
       if (permission?.granted) return true;
       const res = await requestPermission();
       if (!res?.granted) {
-        Alert.alert(t('verification.permsTitle') ?? 'Permissions required', t('verification.permsBody') ?? 'Please allow camera access to continue.');
+        Alert.alert(
+          t('verification.permsTitle') ?? 'Permissions required',
+          t('verification.permsBodyAndroid') ?? 'Please allow camera access to continue. If previously denied, open Settings > Permissions and enable Camera.',
+          [
+            { text: t('common.cancel') ?? 'Cancel' },
+            { text: t('common.openSettings') ?? 'Open Settings', onPress: () => (Platform.OS !== 'web' ? (Linking as any).openSettings?.() : undefined) }
+          ]
+        );
         return false;
       }
       return true;
@@ -122,6 +130,7 @@ export default function VerifyPhotoScreen() {
       return false;
     } finally {
       setIsRequestingPerms(false);
+      setIsPaused(false);
     }
   }, [permission?.granted, requestPermission, t]);
 
@@ -314,6 +323,16 @@ export default function VerifyPhotoScreen() {
     setPhotos((p) => ({ ...p, [expr]: null }));
     setCurrentExpr(expr);
   }, []);
+
+  const autoOpenedRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (Platform.OS !== 'web' && !autoOpenedRef.current) {
+      autoOpenedRef.current = true;
+      setTimeout(() => {
+        openCamera();
+      }, 400);
+    }
+  }, [openCamera]);
 
   return (
     <SafeAreaView style={styles.container}>

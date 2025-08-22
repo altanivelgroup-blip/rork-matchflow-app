@@ -3,7 +3,6 @@ import { Animated, Dimensions, Easing, Platform, StyleSheet, Text, View, Image }
 import { PROMO_GRAPHICS } from '@/constants/promoGraphics';
 import * as Haptics from 'expo-haptics';
 import { Audio, AVPlaybackStatusSuccess } from 'expo-av';
-import LottieView from 'lottie-react-native';
 
 export type CelebrationTheme = 'confetti' | 'hearts' | 'fireworks';
 
@@ -161,27 +160,7 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
 
   return (
     <View pointerEvents="none" style={styles.overlay} testID="match-celebration">
-      {theme === 'fireworks' && Platform.OS !== 'web' ? (
-        <View style={StyleSheet.absoluteFill}>
-          <View style={[styles.lottieBurst, { transform: [{ scale: scaled }], top: H * 0.25 - 80 }]}>
-            <LottieView
-              source={{ uri: jsonUrl }}
-              autoPlay
-              loop={false}
-              onAnimationFinish={() => setLottieReady(true)}
-              style={{ width: W, height: 200 }}
-            />
-          </View>
-          <View style={[styles.lottieBurst, { transform: [{ scale: Math.max(0.5, scaled - 0.2) }], top: H * 0.55 - 60 }]}>
-            <LottieView source={{ uri: jsonUrl }} autoPlay loop={false} style={{ width: W, height: 180 }} />
-          </View>
-          {intensity >= 0.9 ? (
-            <View style={[styles.lottieBurst, { transform: [{ scale: scaled + 0.2 }], top: H * 0.4 - 100 }]}>
-              <LottieView source={{ uri: jsonUrl }} autoPlay loop={false} style={{ width: W, height: 220 }} />
-            </View>
-          ) : null}
-        </View>
-      ) : null}
+      {null}
 
       {particles.map((p, i) => {
         const transform = [{ translateX: p.x }, { translateY: p.y }, { rotate: p.rotate.interpolate({ inputRange: [0, 360], outputRange: ['0deg', '360deg'] }) }, { scale: p.scale }];

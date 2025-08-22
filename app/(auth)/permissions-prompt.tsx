@@ -15,7 +15,7 @@ import { router } from 'expo-router';
 import {
   ArrowLeft,
   ShieldCheck,
-  Camera,
+  Camera as CameraIcon,
   Eye,
   Lock,
   CheckCircle2,
@@ -25,6 +25,7 @@ import {
 import { useCameraPermissions } from 'expo-camera';
 import { useI18n } from '@/contexts/I18nContext';
 import { useAnalytics } from '@/contexts/AnalyticsContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function PermissionsPromptScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -32,28 +33,45 @@ export default function PermissionsPromptScreen() {
   const { t } = useI18n();
   const analytics = useAnalytics();
 
+  const persistFlags = async (flags: Record<string, string>) => {
+    try {
+      const entries = Object.entries(flags).map(([k, v]) => [k, v]) as [string, string][];
+      await AsyncStorage.multiSet(entries);
+    } catch (e) {
+      console.log('[PermissionsPrompt] persist flags error', e);
+    }
+  };
+
   const handleRequestPermissions = async () => {
     try {
       setIsRequesting(true);
-      
+
       console.log('[PermissionsPrompt] Requesting camera permission...');
       const result = await requestPermission();
-      
+
       if (result?.granted) {
         console.log('[PermissionsPrompt] Camera permission granted');
         await analytics.track('permissions_granted', { type: 'camera' });
-        
-        // Navigate to photo verification
+        await persistFlags({
+          'camera:granted': 'true',
+          'camera:denied': 'false',
+          'verification:pending': 'true',
+        });
         router.push('/(auth)/verify-photo' as any);
       } else {
         console.log('[PermissionsPrompt] Camera permission denied');
         await analytics.track('permissions_denied', { type: 'camera' });
-        
+        await persistFlags({
+          'camera:granted': 'false',
+          'camera:denied': 'true',
+          'verification:pending': 'true',
+        });
+
         const title = t('permissions.deniedTitle') ?? 'Camera Permission Required';
         const message = Platform.OS === 'android'
           ? (t('permissions.deniedMessageAndroid') ?? 'Camera access is required for secure verification. Please allow camera access in Settings > Apps > MatchFlow > Permissions > Camera.')
           : (t('permissions.deniedMessageIOS') ?? 'Camera access is required for secure verification. Please allow camera access in Settings > Privacy & Security > Camera.');
-        
+
         Alert.alert(
           title,
           message,
@@ -89,7 +107,7 @@ export default function PermissionsPromptScreen() {
     }
   };
 
-  const handleSkipForNow = () => {
+  const handleSkipForNow = async () => {
     Alert.alert(
       t('permissions.skipTitle') ?? 'Skip Verification?',
       t('permissions.skipMessage') ?? 'You can complete verification later, but some features may be limited until your account is verified. Gallery access will be blocked until camera permission is granted.',
@@ -98,9 +116,14 @@ export default function PermissionsPromptScreen() {
         {
           text: t('permissions.skipConfirm') ?? 'Skip for now',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
+            await persistFlags({
+              'camera:granted': 'false',
+              'camera:denied': 'true',
+              'verification:pending': 'true',
+            });
             analytics.track('verification_skipped');
-            router.push('/(auth)/verify-photo' as any); // Still go to verification but with limited access
+            router.push('/(auth)/profile-setup' as any);
           },
         },
       ]
@@ -110,7 +133,7 @@ export default function PermissionsPromptScreen() {
   return (
     <LinearGradient colors={['#FF6B6B', '#FF8E53']} style={styles.gradient}>
       <SafeAreaView style={styles.container}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} testID="back">
           <ArrowLeft color="white" size={24} />
         </TouchableOpacity>
 
@@ -123,7 +146,7 @@ export default function PermissionsPromptScreen() {
               {t('permissions.title') ?? 'Secure Verification'}
             </Text>
             <Text style={styles.subtitle}>
-              {t('permissions.subtitle') ?? 'We need camera access for secure identity verification'}
+              {t('permissions.subtitle') ?? 'For secure verification, we need camera access'}
             </Text>
           </View>
 
@@ -132,7 +155,7 @@ export default function PermissionsPromptScreen() {
               <Text style={styles.cardTitle}>
                 {t('permissions.whyTitle') ?? 'Why do we need camera access?'}
               </Text>
-              
+
               <View style={styles.reasonItem}>
                 <Eye color="#FF6B6B" size={20} />
                 <View style={styles.reasonText}>
@@ -188,7 +211,7 @@ export default function PermissionsPromptScreen() {
               disabled={isRequesting}
               testID="allow-camera"
             >
-              <Camera color="white" size={20} />
+              <CameraIcon color="white" size={20} />
               <Text style={styles.allowButtonText}>
                 {isRequesting
                   ? (t('permissions.requesting') ?? 'Requesting...')

@@ -684,21 +684,29 @@ export default function GalleryScreen() {
 
   const onPressCardGuarded = useCallback((profile: MockProfile) => {
     try {
+      const score = aiScoresMap[profile.id] ?? profile.aiCompatibilityScore ?? 85;
+      const base = Math.max(0.3, Math.min(1, score / 100));
+      const userMul = Math.max(0.1, Math.min(1, tempIntensity / 10));
+      const intensity = Math.max(0.2, Math.min(1, base * userMul));
+
       if (devBypass) {
-        const score = aiScoresMap[profile.id] ?? profile.aiCompatibilityScore ?? 85;
-        const base = Math.max(0.3, Math.min(1, score / 100));
-        const userMul = Math.max(0.1, Math.min(1, tempIntensity / 10));
-        const intensity = Math.max(0.2, Math.min(1, base * userMul));
         setCelebration({ visible: true, intensity, theme: 'fireworks', message: `Dev Match with ${profile.name}` });
         setTimeout(() => setCelebration(c => ({ ...c, visible: false })), 2500);
         void playClickFx(intensity > 0.7 ? 'boom' : 'pop', tempIntensity);
         return;
       }
+
       if (previewMode) {
+        setCelebration({ visible: true, intensity, theme: 'fireworks', message: `Match with ${profile.name}` });
+        setTimeout(() => setCelebration(c => ({ ...c, visible: false })), 2200);
+        void playClickFx(intensity > 0.7 ? 'boom' : 'pop', tempIntensity);
         setPreviewProfile(profile);
         return;
       }
-      // Default fallback on tablets and when preview is off: open preview to avoid invalid navigation
+
+      setCelebration({ visible: true, intensity, theme: 'fireworks', message: `Match with ${profile.name}` });
+      setTimeout(() => setCelebration(c => ({ ...c, visible: false })), 2200);
+      void playClickFx(intensity > 0.7 ? 'boom' : 'pop', tempIntensity);
       setPreviewProfile(profile);
     } catch (e) {
       console.log('[Gallery] onPressCardGuarded error', e);

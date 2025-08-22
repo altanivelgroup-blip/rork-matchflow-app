@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, Platform, StyleSheet, Text, View, Image } from 'react-native';
 import { PROMO_GRAPHICS } from '@/constants/promoGraphics';
 import * as Haptics from 'expo-haptics';
-import { Audio, AVPlaybackStatusSuccess } from 'expo-av';
 
 export type CelebrationTheme = 'confetti' | 'hearts' | 'fireworks';
 
@@ -72,8 +71,7 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
   const ringScale = useRef(new Animated.Value(0.6)).current;
   const ringOpacity = useRef(new Animated.Value(0.8)).current;
 
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const [lottieData, setLottieData] = useState<object | null>(null);
+  const soundRef = useRef<{ unloadAsync: () => Promise<void>; setOnPlaybackStatusUpdate: (fn: (s: any) => void) => void } | null>(null);
 
   useEffect(() => {
     return () => {
@@ -90,17 +88,6 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
 
   useEffect(() => {
     if (!visible) return;
-
-    const url = lottieUrl ?? (clampedIntensity >= 0.9 ? DEFAULT_FIREWORKS_JSON : ALT_FIREWORKS_JSON);
-    fetch(url)
-      .then((r) => r.json())
-      .then((json) => {
-        setLottieData(json as object);
-      })
-      .catch((e) => {
-        console.log('[MatchCelebration] lottie fetch error', e);
-        setLottieData(null);
-      });
 
     const anims: Animated.CompositeAnimation[] = [];
 
@@ -136,36 +123,39 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
         }
         if (soundEnabled) {
           if (Platform.OS !== 'web') {
-            await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false, staysActiveInBackground: false });
-            if (soundRef.current) {
-              await soundRef.current.unloadAsync();
-              soundRef.current = null;
-            }
-            const isHuge = clampedIntensity >= 0.9;
-            const boomUri = soundBoomUrl ?? SOUND_BOOM_WAV_FALLBACK ?? SOUND_BOOM_MP3;
-            const initialStatus = { volume: Math.max(0, Math.min(1, volume)), shouldPlay: true } as const;
-            const { sound: boom } = await Audio.Sound.createAsync({ uri: boomUri }, initialStatus);
-            soundRef.current = boom;
-            boom.setOnPlaybackStatusUpdate((s) => {
-              const st = s as AVPlaybackStatusSuccess;
-              if (st.isLoaded && st.didJustFinish) {
-                boom.unloadAsync().catch(() => {});
+            try {
+              const { Audio } = await import('expo-av');
+              await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false, staysActiveInBackground: false });
+              if (soundRef.current) {
+                await soundRef.current.unloadAsync();
                 soundRef.current = null;
               }
-            });
-            if (isHuge) {
-              setTimeout(async () => {
-                try {
-                  const popUri = soundPopUrl ?? SOUND_POP_WAV_FALLBACK ?? SOUND_POP_MP3;
-                  const { sound: pop } = await Audio.Sound.createAsync({ uri: popUri }, { volume: Math.max(0, Math.min(1, volume * 0.8)), shouldPlay: true });
-                  pop.setOnPlaybackStatusUpdate((s) => {
-                    const st = s as AVPlaybackStatusSuccess;
-                    if (st.isLoaded && st.didJustFinish) pop.unloadAsync().catch(() => {});
-                  });
-                } catch (err) {
-                  console.log('[MatchCelebration] pop sound error', err);
+              const isHuge = clampedIntensity >= 0.9;
+              const boomUri = soundBoomUrl ?? SOUND_BOOM_WAV_FALLBACK ?? SOUND_BOOM_MP3;
+              const initialStatus = { volume: Math.max(0, Math.min(1, volume)), shouldPlay: true } as const;
+              const { sound: boom } = await Audio.Sound.createAsync({ uri: boomUri }, initialStatus);
+              soundRef.current = boom as unknown as { unloadAsync: () => Promise<void>; setOnPlaybackStatusUpdate: (fn: (s: any) => void) => void };
+              boom.setOnPlaybackStatusUpdate((s: any) => {
+                if (s?.isLoaded && s?.didJustFinish) {
+                  boom.unloadAsync().catch(() => {});
+                  soundRef.current = null;
                 }
-              }, 220);
+              });
+              if (isHuge) {
+                setTimeout(async () => {
+                  try {
+                    const popUri = soundPopUrl ?? SOUND_POP_WAV_FALLBACK ?? SOUND_POP_MP3;
+                    const { sound: pop } = await Audio.Sound.createAsync({ uri: popUri }, { volume: Math.max(0, Math.min(1, volume * 0.8)), shouldPlay: true });
+                    pop.setOnPlaybackStatusUpdate((s: any) => {
+                      if (s?.isLoaded && s?.didJustFinish) pop.unloadAsync().catch(() => {});
+                    });
+                  } catch (err) {
+                    console.log('[MatchCelebration] pop sound error', err);
+                  }
+                }, 220);
+              }
+            } catch (nativeAudioErr) {
+              console.log('[MatchCelebration] native audio init error', nativeAudioErr);
             }
           } else {
             try {
@@ -218,24 +208,9 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
 
   if (!visible) return null;
 
-  const jsonUrl = lottieUrl ?? (clampedIntensity >= 0.9 ? DEFAULT_FIREWORKS_JSON : ALT_FIREWORKS_JSON);
-  const gifOverlay = gifUrl ?? undefined;
-
-  let LottieViewComp: any = null;
-  let ReactLottie: any = null;
-  if (Platform.OS !== 'web') {
-    try {
-      LottieViewComp = require('lottie-react-native').default;
-    } catch {
-      LottieViewComp = null;
-    }
-  } else {
-    try {
-      ReactLottie = require('react-lottie').default;
-    } catch {
-      ReactLottie = null;
-    }
-  }
+  const gifOverlay = gifUrl ?? (clampedIntensity >= 0.9
+    ? 'https://media.giphy.com/media/3o7abB06u9bNzA8lu8/giphy.gif'
+    : 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif');
 
   const burstWidth = W * Math.min(1, 0.85 + clampedIntensity * 0.7);
   const burstHeight = 360 + Math.floor(120 * clampedIntensity);
@@ -245,59 +220,8 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
       <Animated.View style={[styles.flash, { opacity: flashOpacity }]} />
       <Animated.View style={[styles.ring, { top: H / 2 - 40, left: W / 2 - 40, transform: [{ scale: ringScale }], opacity: ringOpacity }]} />
 
-      {Platform.OS !== 'web' && gifOverlay ? (
-        <Image source={{ uri: gifOverlay }} style={{ position: 'absolute', top: H / 2 - burstHeight / 2, width: burstWidth, height: burstHeight }} testID="gif-fireworks" />
-      ) : null}
-
-      {Platform.OS !== 'web' && !gifOverlay && LottieViewComp && lottieData ? (
-        <>
-          <View style={[styles.lottieBurst, { top: H / 2 - burstHeight / 2 }]}> 
-            <LottieViewComp
-              source={lottieData}
-              autoPlay
-              loop={false}
-              speed={Math.max(0.6, Math.min(2.2, 0.9 + clampedIntensity))}
-              style={{ width: burstWidth, height: burstHeight }}
-              resizeMode="cover"
-              testID="lottie-fireworks"
-            />
-          </View>
-          {clampedIntensity > 0.85 ? (
-            <View style={[styles.lottieBurst, { top: H / 2 - burstHeight / 2 - 80 }]}> 
-              <LottieViewComp
-                source={lottieData}
-                autoPlay
-                loop={false}
-                speed={Math.max(0.7, Math.min(2, 0.9 + clampedIntensity * 0.8))}
-                style={{ width: burstWidth * 0.8, height: burstHeight * 0.85, opacity: 0.85 }}
-                resizeMode="cover"
-              />
-            </View>
-          ) : null}
-        </>
-      ) : null}
-
-      {Platform.OS === 'web' && gifOverlay ? (
-        <Image source={{ uri: gifOverlay }} style={{ position: 'absolute', top: H / 2 - burstHeight / 2, width: burstWidth, height: burstHeight }} testID="gif-fireworks-web" />
-      ) : null}
-
-      {Platform.OS === 'web' && !gifOverlay && ReactLottie && lottieData ? (
-        <View style={[styles.lottieBurst, { top: H / 2 - burstHeight / 2 }]}> 
-          <ReactLottie
-            options={{ animationData: lottieData, loop: false, autoplay: true, rendererSettings: { preserveAspectRatio: 'xMidYMid slice' } }}
-            height={burstHeight}
-            width={burstWidth}
-            isStopped={false}
-            isPaused={false}
-          />
-        </View>
-      ) : null}
-
-      {Platform.OS === 'web' && !gifOverlay && (!ReactLottie || !lottieData) ? (
-        <Image
-          source={{ uri: clampedIntensity >= 0.9 ? 'https://media.giphy.com/media/3o7abB06u9bNzA8lu8/giphy.gif' : 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif' }}
-          style={{ position: 'absolute', top: H / 2 - burstHeight / 2, width: burstWidth, height: burstHeight, opacity: 0.9 }}
-        />
+      {gifOverlay ? (
+        <Image source={{ uri: gifOverlay }} style={{ position: 'absolute', top: H / 2 - burstHeight / 2, width: burstWidth, height: burstHeight }} testID={Platform.OS === 'web' ? 'gif-fireworks-web' : 'gif-fireworks'} />
       ) : null}
 
       {particles.map((p, i) => {

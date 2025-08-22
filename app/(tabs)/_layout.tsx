@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { Heart, MessageCircle, User, Settings as SettingsIcon, Grid3X3 } from "lucide-react-native";
+import { Heart, MessageCircle, User, Settings as SettingsIcon, Grid3X3, Globe2 } from "lucide-react-native";
 import React from "react";
 
 export default function TabLayout() {
@@ -31,6 +31,13 @@ export default function TabLayout() {
         options={{
           title: "Gallery",
           tabBarIcon: ({ color }) => <Grid3X3 color={color} size={24} />,
+        }}
+      />
+      <Tabs.Screen
+        name="international"
+        options={{
+          title: "International",
+          tabBarIcon: ({ color }) => <Globe2 color={color} size={24} />,
         }}
       />
       <Tabs.Screen

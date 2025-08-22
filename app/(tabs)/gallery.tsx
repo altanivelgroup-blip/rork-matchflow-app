@@ -16,7 +16,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Heart, X, Filter, Star, MessageCircle, Verified, Sparkles, MapPin, Shield } from 'lucide-react-native';
+import { Heart, X, Filter, Star, MessageCircle, Verified, Sparkles, MapPin, Shield, Moon, Sun, Sparkle } from 'lucide-react-native';
 import { mockProfiles, type MockProfile } from '@/mocks/profiles';
 import { router } from 'expo-router';
 import MatchCelebration from '@/components/MatchCelebration';
@@ -37,6 +37,8 @@ interface FilterOptions {
   minAge: number;
   maxAge: number;
   minCompatibility: number;
+  countries?: string[];
+  internationalOnly?: boolean;
 }
 
 interface HexProfileCardProps {
@@ -404,6 +406,8 @@ export default function GalleryScreen() {
     minAge: 18,
     maxAge: 50,
     minCompatibility: 0,
+    countries: [],
+    internationalOnly: false,
   });
   const [showFilters, setShowFilters] = useState<boolean>(false);
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
@@ -422,6 +426,7 @@ export default function GalleryScreen() {
   const { user } = useAuth();
   const { enabled: tEnabled, translate, targetLang } = useTranslate();
   const { limits, canSwipe, swipeState, incSwipe } = useMembership();
+  const [darkMode, setDarkMode] = useState<boolean>(false);
   
   // AI compatibility scoring (fallback to mock data if AI service unavailable)
   const aiQuery = useQuery<{ scores: { id: string; score: number; reason: string }[] }, Error>({
@@ -500,25 +505,27 @@ export default function GalleryScreen() {
     scores.forEach(s => scoreMap[s.id] = s.score);
     
     let filtered = mockProfiles.filter(profile => {
-      // Skip already liked/passed profiles
       if (likedIds.has(profile.id) || passedIds.has(profile.id)) return false;
-      
-      // Age filter
       if (profile.age < filters.minAge || profile.age > filters.maxAge) return false;
-      
-      // Verified filter
       if (filters.verifiedOnly && (!profile.faceScoreFromVerification || profile.faceScoreFromVerification <= 0.8)) {
         return false;
       }
-      
-      // Compatibility filter
       const score = scoreMap[profile.id] ?? 0;
       if (score < filters.minCompatibility) return false;
-      
+      // International filter: treat any non-local country selection; using city heuristic for mock
+      if (filters.internationalOnly) {
+        const city = profile.location?.city ?? '';
+        const isInternational = !/(San Francisco|Los Angeles|San Jose|Las Vegas|Oakland|Seattle|San Diego|New York)/i.test(city);
+        if (!isInternational) return false;
+      }
+      if (filters.countries && filters.countries.length) {
+        const city = (profile.location?.city ?? '').toLowerCase();
+        const match = filters.countries.some(c => city.includes(c.toLowerCase()));
+        if (!match) return false;
+      }
       return true;
     });
     
-    // Sort by AI compatibility score (highest first)
     filtered.sort((a, b) => {
       const scoreA = scoreMap[a.id] ?? 0;
       const scoreB = scoreMap[b.id] ?? 0;
@@ -782,10 +789,10 @@ export default function GalleryScreen() {
   };
   
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, darkMode && styles.containerDark]}>
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Gallery</Text>
+      <View style={[styles.header, darkMode && styles.headerDark]}>
+        <Text style={[styles.headerTitle, darkMode && styles.headerTitleDark]}>Gallery</Text>
         <View style={styles.headerRight}>
           {limits.dailySwipes != null ? (
             <View style={styles.swipePill} testID="swipe-counter">
@@ -805,26 +812,43 @@ export default function GalleryScreen() {
           >
             <Filter size={20} color="#6B7280" />
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterButton, { marginLeft: 8 }]
+            }
+            onPress={() => setDarkMode(v => !v)}
+            testID="toggle-dark"
+          >
+            {darkMode ? <Sun size={18} color="#F59E0B" /> : <Moon size={18} color="#111827" />}
+          </TouchableOpacity>
         </View>
       </View>
       
       {/* AI Loading Overlay */}
       {aiQuery.isLoading && (
-        <View style={styles.aiLoadingOverlay}>
+        <View style={[styles.aiLoadingOverlay, darkMode && styles.aiLoadingOverlayDark]}>
           <ActivityIndicator color="#EF4444" />
-          <Text style={styles.aiLoadingText}>Personalizing your gallery...</Text>
+          <Text style={[styles.aiLoadingText, darkMode && styles.aiLoadingTextDark]}>Personalizing your gallery...</Text>
         </View>
       )}
       
       {/* Gallery Header with Promo Graphic */}
       {displayedProfiles.length === 0 && !aiQuery.isLoading && (
-        <View style={styles.emptyGallery}>
+        <View style={[styles.emptyGallery, darkMode && styles.emptyGalleryDark]}>
           <Image source={{ uri: PROMO_GRAPHICS.gallery.collage }} style={styles.promoImage} />
-          <Text style={styles.emptyTitle}>Discover Amazing People</Text>
-          <Text style={styles.emptySubtitle}>Your perfect matches are waiting to be found</Text>
+          <Text style={[styles.emptyTitle, darkMode && styles.emptyTitleDark]}>Discover Amazing People</Text>
+          <Text style={[styles.emptySubtitle, darkMode && styles.emptySubtitleDark]}>Your perfect matches are waiting to be found</Text>
         </View>
       )}
       
+      {/* Premium Promo Banner */}
+      <View style={[styles.promoBanner, darkMode && styles.promoBannerDark]} testID="promo-banner">
+        <Sparkle size={16} color={darkMode ? '#FDE68A' : '#F59E0B'} />
+        <Text style={[styles.promoText, darkMode && styles.promoTextDark]}>First 90 days $5 — unlock AI Dream Dates!</Text>
+        <TouchableOpacity style={[styles.promoCta, darkMode && styles.promoCtaDark]} onPress={() => setShowUpgrade(true)} testID="promo-cta">
+          <Text style={styles.promoCtaText}>Upgrade</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Hexagon Profiles Grid */}
       <FlatList
         data={hexRows}
@@ -893,6 +917,43 @@ export default function GalleryScreen() {
                 <Text style={styles.compatText}>{filters.minCompatibility}%+</Text>
               </View>
             </View>
+
+            <View style={styles.filterSection}>
+              <Text style={styles.filterSectionTitle}>Countries</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {['USA','Mexico','Colombia','China','Japan','Brazil'].map((c) => {
+                  const active = (filters.countries ?? []).includes(c);
+                  return (
+                    <TouchableOpacity
+                      key={c}
+                      onPress={() => setFilters(prev => {
+                        const set = new Set(prev.countries ?? []);
+                        if (set.has(c)) set.delete(c); else set.add(c);
+                        return { ...prev, countries: Array.from(set) };
+                      })}
+                      style={[styles.countryPill, active && styles.countryPillActive]}
+                      testID={`country-${c}`}
+                    >
+                      <Text style={[styles.countryPillText, active && styles.countryPillTextActive]}>{c}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.filterOption}
+              onPress={() => setFilters(prev => ({ ...prev, internationalOnly: !prev.internationalOnly }))}
+              testID="international-only"
+            >
+              <View style={styles.filterOptionLeft}>
+                <Verified size={20} color="#16A34A" />
+                <Text style={styles.filterOptionText}>International only</Text>
+              </View>
+              <View style={[styles.checkbox, filters.internationalOnly && styles.checkboxActive]}>
+                {filters.internationalOnly && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+            </TouchableOpacity>
           </View>
         </SafeAreaView>
       </Modal>
@@ -964,6 +1025,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F9FAFB',
   },
+  containerDark: {
+    backgroundColor: '#0B1220',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -974,10 +1038,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
+  headerDark: {
+    backgroundColor: '#111827',
+    borderBottomColor: '#1F2937',
+  },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#111827',
+  },
+  headerTitleDark: {
+    color: '#F9FAFB',
   },
   headerRight: {
     flexDirection: 'row',
@@ -1016,11 +1087,18 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#FECACA',
   },
+  aiLoadingOverlayDark: {
+    backgroundColor: '#111827',
+    borderBottomColor: '#1F2937',
+  },
   aiLoadingText: {
     marginTop: 8,
     fontSize: 14,
     color: '#DC2626',
     fontWeight: '600',
+  },
+  aiLoadingTextDark: {
+    color: '#FCA5A5',
   },
   hexGridContainer: {
     padding: 20,
@@ -1267,6 +1345,26 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#111827',
   },
+  countryPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#F9FAFB',
+  },
+  countryPillActive: {
+    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
+  },
+  countryPillText: {
+    fontSize: 12,
+    color: '#374151',
+    fontWeight: '600',
+  },
+  countryPillTextActive: {
+    color: '#DC2626',
+  },
   filterContent: {
     flex: 1,
     padding: 20,
@@ -1418,12 +1516,36 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
+  emptyGalleryDark: {
+    backgroundColor: '#111827',
+  },
   promoImage: {
     width: 200,
     height: 200,
     borderRadius: 16,
     marginBottom: 20,
   },
+  promoBanner: {
+    marginTop: 8,
+    marginHorizontal: 16,
+    backgroundColor: '#FFF7ED',
+    borderColor: '#FED7AA',
+    borderWidth: 1,
+    padding: 12,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  promoBannerDark: {
+    backgroundColor: '#1F2937',
+    borderColor: '#374151',
+  },
+  promoText: { color: '#9A3412', fontSize: 13, fontWeight: '800', flex: 1 },
+  promoTextDark: { color: '#FDE68A' },
+  promoCta: { backgroundColor: '#EF4444', borderColor: '#EF4444', borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  promoCtaDark: { backgroundColor: '#DC2626', borderColor: '#DC2626' },
+  promoCtaText: { color: '#fff', fontSize: 12, fontWeight: '800' },
   emptyTitle: {
     fontSize: 20,
     fontWeight: '700',
@@ -1431,10 +1553,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlign: 'center',
   },
+  emptyTitleDark: { color: '#F9FAFB' },
   emptySubtitle: {
     fontSize: 16,
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: 24,
   },
+  emptySubtitleDark: { color: '#94A3B8' },
 });

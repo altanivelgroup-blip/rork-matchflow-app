@@ -124,4 +124,18 @@ export const mockProfiles: MockProfile[] = [
     distanceFromUser: 2570,
     isVerified: true,
   },
+  {
+    id: "9",
+    name: "Ana",
+    age: 27,
+    bio: "Carioca, samba e praia. Vamos tomar um açaí e ver o pôr do sol?",
+    image: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=800",
+    interests: ["Samba", "Beach", "Hiking", "Café"],
+    likedYou: false,
+    location: { lat: -22.9068, lon: -43.1729, city: "Rio de Janeiro" },
+    faceScoreFromVerification: 0.9,
+    aiCompatibilityScore: 88,
+    distanceFromUser: 4300,
+    isVerified: true,
+  },
 ];

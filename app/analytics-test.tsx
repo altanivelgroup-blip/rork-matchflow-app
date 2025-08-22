@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Stack } from 'expo-router';
 import { useAnalytics } from '@/contexts/AnalyticsContext';
+import type { AnalyticsEventName } from '@/contexts/AnalyticsContext';
 
 export default function AnalyticsTest() {
   const analytics = useAnalytics();
@@ -10,18 +11,18 @@ export default function AnalyticsTest() {
 
   const push = (s: string) => setLog((prev) => [s, ...prev].slice(0, 50));
 
-  const events: { name: ReturnType<() => import('@/contexts/AnalyticsContext').AnalyticsEventName>; params?: Record<string, string | number | boolean | null> }[] = useMemo(() => ([
-    { name: 'sign_up', params: { locale: 'en', age: 28, country } } as const,
-    { name: 'verification_started', params: { method: 'face' as const } } as const,
-    { name: 'verification_passed', params: { liveness: 0.92 } } as const,
-    { name: 'ai_sim_opened', params: { scenario: 'Paris Walk' } } as const,
-    { name: 'ai_sim_completed', params: { chemistry: 87 } } as const,
-    { name: 'premium_upgrade', params: { price: 9.99, promo: 5 } } as const,
-    { name: 'promo_applied', params: { code: 'WELCOME5' } } as const,
-    { name: 'match_like', params: { profileId: 'p1', country } } as const,
-    { name: 'match_mutual', params: { profileId: 'p1', country } } as const,
-    { name: 'chat_message', params: { len: 42 } } as const,
-    { name: 'churn_marked', params: { reason: 'inactivity' } } as const,
+  const events: { name: AnalyticsEventName; params?: Record<string, string | number | boolean | null> }[] = useMemo(() => ([
+    { name: 'sign_up', params: { locale: 'en', age: 28, country } as Record<string, string | number | boolean | null> },
+    { name: 'verification_started', params: { method: 'face' } as Record<string, string | number | boolean | null> },
+    { name: 'verification_passed', params: { liveness: 0.92 } as Record<string, string | number | boolean | null> },
+    { name: 'ai_sim_opened', params: { scenario: 'Paris Walk' } as Record<string, string | number | boolean | null> },
+    { name: 'ai_sim_completed', params: { chemistry: 87 } as Record<string, string | number | boolean | null> },
+    { name: 'premium_upgrade', params: { price: 9.99, promo: 5 } as Record<string, string | number | boolean | null> },
+    { name: 'promo_applied', params: { code: 'WELCOME5' } as Record<string, string | number | boolean | null> },
+    { name: 'match_like', params: { profileId: 'p1', country } as Record<string, string | number | boolean | null> },
+    { name: 'match_mutual', params: { profileId: 'p1', country } as Record<string, string | number | boolean | null> },
+    { name: 'chat_message', params: { len: 42 } as Record<string, string | number | boolean | null> },
+    { name: 'churn_marked', params: { reason: 'inactivity' } as Record<string, string | number | boolean | null> },
   ]), [country]);
 
   return (

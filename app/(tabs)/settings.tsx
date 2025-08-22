@@ -12,7 +12,6 @@ import { showToast } from '@/lib/toast';
 import { backend, VerificationModePref, CaptureChoice, PreferredGateway } from '@/lib/backend';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/contexts/NotificationsContext';
-import { useAnalytics } from '@/contexts/AnalyticsContext';
 
 function MembershipSection() {
   const { tier, setTier, limits, subscription, cancel, restore, refresh } = useMembership();

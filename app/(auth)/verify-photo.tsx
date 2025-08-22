@@ -621,6 +621,25 @@ export default function VerifyPhotoScreen() {
           )}
         </TouchableOpacity>
 
+        <View style={styles.utilityRow}>
+          <TouchableOpacity
+            onPress={resetAll}
+            style={styles.utilityBtn}
+            testID="reset-state"
+          >
+            <RefreshCcw color="#6B7280" size={16} />
+            <Text style={styles.utilityText}>{t('verification.resetState') ?? 'Reset State'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => { setSecondsLeft(120); setExpiredPromptShown(false); showToast(t('verification.timerRestarted') ?? 'Timer restarted'); }}
+            style={styles.utilityBtn}
+            testID="restart-timer"
+          >
+            <TimerIcon color="#6B7280" size={16} />
+            <Text style={styles.utilityText}>{t('verification.restartTimerShort') ?? 'Restart 2‑min'}</Text>
+          </TouchableOpacity>
+        </View>
+
         {cameraError ? (
           <View style={styles.errorBanner}>
             <AlertCircle color="#991b1b" size={16} />
@@ -728,6 +747,9 @@ const styles = StyleSheet.create({
   errorBanner: { marginTop: 12, backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: 1, padding: 10, borderRadius: 10, flexDirection: 'row', alignItems: 'center' },
   errorText: { color: '#991b1b', marginLeft: 8, fontSize: 12 },
   verifyingRow: { flexDirection: 'row', alignItems: 'center' },
+  utilityRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
+  utilityBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#F9FAFB', flex: 1, marginHorizontal: 4 },
+  utilityText: { color: '#374151', fontSize: 12, fontWeight: '600' },
   modalContainer: { flex: 1, backgroundColor: '#000' },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff' },
   closeBtn: { padding: 6 },

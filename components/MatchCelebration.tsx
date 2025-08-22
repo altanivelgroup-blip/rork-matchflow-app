@@ -131,7 +131,7 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
                 soundRef.current = null;
               }
               const isHuge = clampedIntensity >= 0.9;
-              const boomUri = soundBoomUrl ?? SOUND_BOOM_WAV_FALLBACK ?? SOUND_BOOM_MP3;
+              const boomUri = (soundBoomUrl ?? SOUND_BOOM_MP3 ?? SOUND_BOOM_WAV_FALLBACK);
               const initialStatus = { volume: Math.max(0, Math.min(1, volume)), shouldPlay: true } as const;
               const { sound: boom } = await Audio.Sound.createAsync({ uri: boomUri }, initialStatus);
               soundRef.current = boom as unknown as { unloadAsync: () => Promise<void>; setOnPlaybackStatusUpdate: (fn: (s: any) => void) => void };
@@ -144,7 +144,7 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
               if (isHuge) {
                 setTimeout(async () => {
                   try {
-                    const popUri = soundPopUrl ?? SOUND_POP_WAV_FALLBACK ?? SOUND_POP_MP3;
+                    const popUri = (soundPopUrl ?? SOUND_POP_MP3 ?? SOUND_POP_WAV_FALLBACK);
                     const { sound: pop } = await Audio.Sound.createAsync({ uri: popUri }, { volume: Math.max(0, Math.min(1, volume * 0.8)), shouldPlay: true });
                     pop.setOnPlaybackStatusUpdate((s: any) => {
                       if (s?.isLoaded && s?.didJustFinish) pop.unloadAsync().catch(() => {});
@@ -160,15 +160,13 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
           } else {
             try {
               const isHuge = clampedIntensity >= 0.9;
-              const boomSrc = soundBoomUrl ?? SOUND_BOOM_WAV_FALLBACK ?? SOUND_BOOM_MP3;
-              const boom = createWebAudio(boomSrc);
+              const boom = createWebAudioWithFallback([soundBoomUrl, SOUND_BOOM_MP3, SOUND_BOOM_WAV_FALLBACK].filter(Boolean) as string[]);
               boom.volume = Math.max(0, Math.min(1, volume));
               void boom.play();
               if (isHuge) {
                 setTimeout(() => {
                   try {
-                    const popSrc = soundPopUrl ?? SOUND_POP_WAV_FALLBACK ?? SOUND_POP_MP3;
-                    const pop = createWebAudio(popSrc);
+                    const pop = createWebAudioWithFallback([soundPopUrl, SOUND_POP_MP3, SOUND_POP_WAV_FALLBACK].filter(Boolean) as string[]);
                     pop.volume = Math.max(0, Math.min(1, volume * 0.8));
                     void pop.play();
                   } catch (er) {
@@ -266,11 +264,49 @@ function pickColor(theme: CelebrationTheme): string {
   return confetti[Math.floor(Math.random() * confetti.length)] as string;
 }
 
-function createWebAudio(src: string) {
-  if (Platform.OS === 'web' && typeof (window as any)?.Audio !== 'undefined') {
-    return new (window as any).Audio(src);
+function getMimeFromUrl(url: string): string | undefined {
+  const lower = url.toLowerCase();
+  if (lower.endsWith('.mp3')) return 'audio/mpeg';
+  if (lower.endsWith('.wav')) return 'audio/wav';
+  if (lower.endsWith('.m4a')) return 'audio/mp4';
+  return undefined;
+}
+
+function createWebAudioWithFallback(sources: string[]) {
+  if (Platform.OS !== 'web' || typeof (window as any)?.Audio === 'undefined') {
+    throw new Error('Audio not supported');
   }
-  throw new Error('Audio not supported');
+  const audio = new (window as any).Audio();
+  audio.preload = 'auto';
+  (audio as any).crossOrigin = 'anonymous';
+
+  let chosen: string | null = null;
+  for (const src of sources) {
+    if (!src) continue;
+    const mime = getMimeFromUrl(src);
+    if (!mime || audio.canPlayType(mime)) {
+      chosen = src;
+      break;
+    }
+  }
+  if (!chosen && sources.length > 0) chosen = sources[0] as string;
+  if (!chosen) throw new Error('No audio sources provided');
+
+  audio.src = chosen;
+
+  audio.onerror = () => {
+    const idx = sources.indexOf(chosen as string);
+    if (idx >= 0 && idx < sources.length - 1) {
+      const next = sources[idx + 1] as string;
+      const mime = getMimeFromUrl(next);
+      if (!mime || audio.canPlayType(mime)) {
+        audio.src = next;
+        audio.load();
+      }
+    }
+  };
+
+  return audio as HTMLAudioElement;
 }
 
 const styles = StyleSheet.create({

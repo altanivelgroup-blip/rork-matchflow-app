@@ -61,6 +61,17 @@ export default function MatchAnimationsTest() {
     return d > 1000;
   }, [config.profile]);
 
+  const gifUrl = useMemo(() => {
+    const huge = 'https://media.giphy.com/media/3o7abB06u9bNzA8lu8/giphy.gif';
+    const mid = 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif';
+    const tiny = 'https://media.giphy.com/media/3oEduQAsYcJKQH2XsI/giphy.gif';
+    const score = config.aiScore;
+    if (Platform.OS !== 'web') return undefined;
+    if (score >= 90) return huge;
+    if (score >= 75) return mid;
+    return tiny;
+  }, [config.aiScore]);
+
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -325,6 +336,9 @@ export default function MatchAnimationsTest() {
         volume={volume}
         soundEnabled
         vibrate
+        gifUrl={gifUrl}
+        soundBoomUrl={'https://cdn.freesound.org/previews/235/235968_3984679-lq.wav'}
+        soundPopUrl={'https://cdn.freesound.org/previews/341/341695_6262555-lq.wav'}
       />
 
       {/* Crash guard for web specific features */}

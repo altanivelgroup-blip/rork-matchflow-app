@@ -16,6 +16,9 @@ export interface MatchCelebrationProps {
   soundEnabled?: boolean;
   vibrate?: boolean;
   lottieUrl?: string;
+  gifUrl?: string;
+  soundBoomUrl?: string;
+  soundPopUrl?: string;
 }
 
 interface Particle {
@@ -33,10 +36,12 @@ const { width: W, height: H } = Dimensions.get('window');
 
 const DEFAULT_FIREWORKS_JSON = 'https://assets8.lottiefiles.com/packages/lf20_pzud6sat.json';
 const ALT_FIREWORKS_JSON = 'https://assets8.lottiefiles.com/packages/lf20_kyi6f3u3.json';
-const SOUND_BOOM = 'https://assets.mixkit.co/active_storage/sfx/2560/2560-preview.mp3';
-const SOUND_POP = 'https://assets.mixkit.co/active_storage/sfx/2561/2561-preview.mp3';
+const SOUND_BOOM_MP3 = 'https://assets.mixkit.co/active_storage/sfx/2560/2560-preview.mp3';
+const SOUND_POP_MP3 = 'https://assets.mixkit.co/active_storage/sfx/2561/2561-preview.mp3';
+const SOUND_BOOM_WAV_FALLBACK = 'https://cdn.freesound.org/previews/235/235968_3984679-lq.wav';
+const SOUND_POP_WAV_FALLBACK = 'https://cdn.freesound.org/previews/341/341695_6262555-lq.wav';
 
-export default function MatchCelebration({ visible, onDone, intensity = 1, theme = 'fireworks', message = "It's a Match!", volume = 0.9, soundEnabled = true, vibrate = true, lottieUrl }: MatchCelebrationProps) {
+export default function MatchCelebration({ visible, onDone, intensity = 1, theme = 'fireworks', message = "It's a Match!", volume = 0.9, soundEnabled = true, vibrate = true, lottieUrl, gifUrl, soundBoomUrl, soundPopUrl }: MatchCelebrationProps) {
   const clampedIntensity = Math.max(0.05, Math.min(1, intensity));
   const count = Math.max(24, Math.floor(140 * clampedIntensity));
   const duration = 900 + Math.floor(1300 * clampedIntensity);
@@ -137,7 +142,9 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
               soundRef.current = null;
             }
             const isHuge = clampedIntensity >= 0.9;
-            const { sound: boom } = await Audio.Sound.createAsync({ uri: SOUND_BOOM }, { volume: Math.max(0, Math.min(1, volume)), shouldPlay: true });
+            const boomUri = soundBoomUrl ?? SOUND_BOOM_WAV_FALLBACK ?? SOUND_BOOM_MP3;
+            const initialStatus = { volume: Math.max(0, Math.min(1, volume)), shouldPlay: true } as const;
+            const { sound: boom } = await Audio.Sound.createAsync({ uri: boomUri }, initialStatus);
             soundRef.current = boom;
             boom.setOnPlaybackStatusUpdate((s) => {
               const st = s as AVPlaybackStatusSuccess;
@@ -149,7 +156,8 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
             if (isHuge) {
               setTimeout(async () => {
                 try {
-                  const { sound: pop } = await Audio.Sound.createAsync({ uri: SOUND_POP }, { volume: Math.max(0, Math.min(1, volume * 0.8)), shouldPlay: true });
+                  const popUri = soundPopUrl ?? SOUND_POP_WAV_FALLBACK ?? SOUND_POP_MP3;
+                  const { sound: pop } = await Audio.Sound.createAsync({ uri: popUri }, { volume: Math.max(0, Math.min(1, volume * 0.8)), shouldPlay: true });
                   pop.setOnPlaybackStatusUpdate((s) => {
                     const st = s as AVPlaybackStatusSuccess;
                     if (st.isLoaded && st.didJustFinish) pop.unloadAsync().catch(() => {});
@@ -162,13 +170,15 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
           } else {
             try {
               const isHuge = clampedIntensity >= 0.9;
-              const boom = createWebAudio(SOUND_BOOM);
+              const boomSrc = soundBoomUrl ?? SOUND_BOOM_WAV_FALLBACK ?? SOUND_BOOM_MP3;
+              const boom = createWebAudio(boomSrc);
               boom.volume = Math.max(0, Math.min(1, volume));
               void boom.play();
               if (isHuge) {
                 setTimeout(() => {
                   try {
-                    const pop = createWebAudio(SOUND_POP);
+                    const popSrc = soundPopUrl ?? SOUND_POP_WAV_FALLBACK ?? SOUND_POP_MP3;
+                    const pop = createWebAudio(popSrc);
                     pop.volume = Math.max(0, Math.min(1, volume * 0.8));
                     void pop.play();
                   } catch (er) {
@@ -209,6 +219,7 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
   if (!visible) return null;
 
   const jsonUrl = lottieUrl ?? (clampedIntensity >= 0.9 ? DEFAULT_FIREWORKS_JSON : ALT_FIREWORKS_JSON);
+  const gifOverlay = gifUrl ?? undefined;
 
   let LottieViewComp: any = null;
   let ReactLottie: any = null;
@@ -234,7 +245,11 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
       <Animated.View style={[styles.flash, { opacity: flashOpacity }]} />
       <Animated.View style={[styles.ring, { top: H / 2 - 40, left: W / 2 - 40, transform: [{ scale: ringScale }], opacity: ringOpacity }]} />
 
-      {Platform.OS !== 'web' && LottieViewComp && lottieData ? (
+      {Platform.OS !== 'web' && gifOverlay ? (
+        <Image source={{ uri: gifOverlay }} style={{ position: 'absolute', top: H / 2 - burstHeight / 2, width: burstWidth, height: burstHeight }} testID="gif-fireworks" />
+      ) : null}
+
+      {Platform.OS !== 'web' && !gifOverlay && LottieViewComp && lottieData ? (
         <>
           <View style={[styles.lottieBurst, { top: H / 2 - burstHeight / 2 }]}> 
             <LottieViewComp
@@ -262,7 +277,11 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
         </>
       ) : null}
 
-      {Platform.OS === 'web' && ReactLottie && lottieData ? (
+      {Platform.OS === 'web' && gifOverlay ? (
+        <Image source={{ uri: gifOverlay }} style={{ position: 'absolute', top: H / 2 - burstHeight / 2, width: burstWidth, height: burstHeight }} testID="gif-fireworks-web" />
+      ) : null}
+
+      {Platform.OS === 'web' && !gifOverlay && ReactLottie && lottieData ? (
         <View style={[styles.lottieBurst, { top: H / 2 - burstHeight / 2 }]}> 
           <ReactLottie
             options={{ animationData: lottieData, loop: false, autoplay: true, rendererSettings: { preserveAspectRatio: 'xMidYMid slice' } }}
@@ -274,7 +293,7 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
         </View>
       ) : null}
 
-      {Platform.OS === 'web' && (!ReactLottie || !lottieData) ? (
+      {Platform.OS === 'web' && !gifOverlay && (!ReactLottie || !lottieData) ? (
         <Image
           source={{ uri: clampedIntensity >= 0.9 ? 'https://media.giphy.com/media/3o7abB06u9bNzA8lu8/giphy.gif' : 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif' }}
           style={{ position: 'absolute', top: H / 2 - burstHeight / 2, width: burstWidth, height: burstHeight, opacity: 0.9 }}

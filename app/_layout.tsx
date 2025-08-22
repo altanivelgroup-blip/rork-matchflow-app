@@ -58,6 +58,12 @@ const RootLayoutNav = React.memo(function RootLayoutNav() {
           title: "Splash Test",
         }}
       />
+      <Stack.Screen
+        name="match-animations-test"
+        options={{
+          title: "Match Animations Test",
+        }}
+      />
     </Stack>
   );
 });

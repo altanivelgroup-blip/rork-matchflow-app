@@ -662,8 +662,8 @@ export default function GalleryScreen() {
       const vol = Math.max(0.2, Math.min(1, intensityVal / 10));
       if (Platform.OS === 'web') {
         const url = kind === 'boom'
-          ? 'https://cdn.jsdelivr.net/gh/naptha/tinyfiles@main/sfx/boom.mp3'
-          : 'https://cdn.jsdelivr.net/gh/naptha/tinyfiles@main/sfx/pop.mp3';
+          ? 'https://www.soundjay.com/misc/sounds/bell-ringing-05.wav'
+          : 'https://www.soundjay.com/misc/sounds/bell-ringing-04.wav';
         const AudioCtor = (window as unknown as { Audio?: new (src?: string) => HTMLAudioElement }).Audio;
         if (AudioCtor) {
           const audio = new AudioCtor(url);
@@ -1211,18 +1211,16 @@ export default function GalleryScreen() {
       </Modal>
       
       {/* Match Celebration */}
-      {animationsEnabled && (
-        <MatchCelebration
-          visible={celebration.visible}
-          intensity={celebration.intensity}
-          theme={celebration.theme}
-          message={celebration.message}
-          volume={0.8}
-          soundEnabled={true}
-          vibrate={true}
-          onDone={() => setCelebration(c => ({ ...c, visible: false }))}
-        />
-      )}
+      <MatchCelebration
+        visible={celebration.visible && animationsEnabled}
+        intensity={celebration.intensity}
+        theme={celebration.theme}
+        message={celebration.message}
+        volume={Math.max(0.1, Math.min(1, tempIntensity / 10))}
+        soundEnabled={true}
+        vibrate={true}
+        onDone={() => setCelebration(c => ({ ...c, visible: false }))}
+      />
       
       {/* Upgrade Modal */}
       <UpgradeModal

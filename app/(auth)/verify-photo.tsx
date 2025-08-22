@@ -111,22 +111,47 @@ export default function VerifyPhotoScreen() {
     try {
       setIsRequestingPerms(true);
       setIsPaused(true);
-      if (permission?.granted) return true;
+      
+      // Check if we already have permission
+      if (permission?.granted) {
+        console.log('[VerifyPhoto] Camera permission already granted');
+        return true;
+      }
+      
+      console.log('[VerifyPhoto] Requesting camera permission...');
       const res = await requestPermission();
+      console.log('[VerifyPhoto] Permission result:', res);
+      
       if (!res?.granted) {
+        const title = t('verification.permsTitle') ?? 'Camera Permission Required';
+        const message = Platform.OS === 'android' 
+          ? (t('verification.permsBodyAndroid') ?? 'Camera access is required for photo verification. Please allow camera access in the next dialog or go to Settings > Apps > MatchFlow > Permissions > Camera.')
+          : (t('verification.permsBodyIOS') ?? 'Camera access is required for photo verification. Please allow camera access in Settings > Privacy & Security > Camera.');
+        
         Alert.alert(
-          t('verification.permsTitle') ?? 'Permissions required',
-          t('verification.permsBodyAndroid') ?? 'Please allow camera access to continue. If previously denied, open Settings > Permissions and enable Camera.',
+          title,
+          message,
           [
             { text: t('common.cancel') ?? 'Cancel' },
-            { text: t('common.openSettings') ?? 'Open Settings', onPress: () => (Platform.OS !== 'web' ? (Linking as any).openSettings?.() : undefined) }
+            { text: t('common.openSettings') ?? 'Open Settings', onPress: () => {
+              if (Platform.OS !== 'web') {
+                Linking.openSettings();
+              }
+            }}
           ]
         );
         return false;
       }
+      
+      console.log('[VerifyPhoto] Camera permission granted successfully');
       return true;
     } catch (e) {
       console.log('[VerifyPhoto] perms error', e);
+      Alert.alert(
+        t('common.error') ?? 'Error',
+        t('verification.permissionError') ?? 'Failed to request camera permission. Please try again.',
+        [{ text: t('common.ok') ?? 'OK' }]
+      );
       return false;
     } finally {
       setIsRequestingPerms(false);
@@ -151,11 +176,19 @@ export default function VerifyPhotoScreen() {
 
 
   const openCamera = useCallback(async () => {
+    console.log('[VerifyPhoto] Opening camera...');
     const ok = await requestPermissions();
-    if (!ok) return;
+    if (!ok) {
+      console.log('[VerifyPhoto] Camera permission denied');
+      return;
+    }
+    
     if (Platform.OS === 'web') {
       setIsPaused(true);
-      Alert.alert(t('verification.webManualTitle') ?? 'Manual capture on web', t('verification.webManualBody') ?? 'Auto face detection is not available on web. We will open your device camera or file picker for each expression.');
+      Alert.alert(
+        t('verification.webManualTitle') ?? 'Manual capture on web', 
+        t('verification.webManualBody') ?? 'Auto face detection is not available on web. We will open your device camera or file picker for each expression.'
+      );
       try {
         const result = await ImagePicker.launchCameraAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -186,6 +219,7 @@ export default function VerifyPhotoScreen() {
           }
         }
       } catch (e) {
+        console.log('[VerifyPhoto] Web camera error:', e);
         Alert.alert(t('verification.cameraError') ?? 'Camera error', t('verification.cameraErrorDetail') ?? 'Unable to open camera. Try again.');
         showToast(t('verification.cameraErrorDetail') ?? 'Unable to open camera. Try again.');
       } finally {
@@ -193,12 +227,15 @@ export default function VerifyPhotoScreen() {
       }
       return;
     }
+    
+    // Native camera setup
+    console.log('[VerifyPhoto] Setting up native camera...');
     setCameraReady(false);
     setCameraError(null);
     setShowCamera(true);
     setIsPaused(true);
     captureGuardRef.current = { capturing: false };
-  }, [requestPermissions, t]);
+  }, [requestPermissions, currentExpr, t, showToast]);
 
   const takeNowExpr = useCallback(async () => {
     try {
@@ -328,9 +365,11 @@ export default function VerifyPhotoScreen() {
   useEffect(() => {
     if (Platform.OS !== 'web' && !autoOpenedRef.current) {
       autoOpenedRef.current = true;
+      // Give a bit more time for the component to fully mount
       setTimeout(() => {
+        console.log('[VerifyPhoto] Auto-opening camera on native platform');
         openCamera();
-      }, 400);
+      }, 800);
     }
   }, [openCamera]);
 

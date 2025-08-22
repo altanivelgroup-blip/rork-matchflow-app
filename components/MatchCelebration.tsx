@@ -34,12 +34,12 @@ interface Particle {
 const { width: W, height: H } = Dimensions.get('window');
 
 
-const SOUND_BOOM_MP3 = 'https://upload.wikimedia.org/wikipedia/commons/1/17/Explosion1.wav';
-const SOUND_POP_MP3 = 'https://upload.wikimedia.org/wikipedia/commons/3/3f/Small_explosion.wav';
-const SOUND_BOOM_WAV_FALLBACK = 'https://cdn.jsdelivr.net/gh/naptha/tiny-sound@master/sounds/explosion.wav';
-const SOUND_POP_WAV_FALLBACK = 'https://cdn.jsdelivr.net/gh/naptha/tiny-sound@master/sounds/pop.wav';
+const SOUND_BOOM_MP3 = 'https://www.soundjay.com/misc/sounds/bell-ringing-05.wav';
+const SOUND_POP_MP3 = 'https://www.soundjay.com/misc/sounds/bell-ringing-04.wav';
+const SOUND_BOOM_WAV_FALLBACK = 'https://cdn.freesound.org/previews/316/316847_5123451-lq.wav';
+const SOUND_POP_WAV_FALLBACK = 'https://cdn.freesound.org/previews/341/341695_6262555-lq.wav';
 
-export default function MatchCelebration({ visible, onDone, intensity = 1, theme = 'fireworks', message = "It's a Match!", volume = 0.9, soundEnabled = true, vibrate = true, lottieUrl, gifUrl, soundBoomUrl, soundPopUrl }: MatchCelebrationProps) {
+const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, intensity = 1, theme = 'fireworks', message = "It's a Match!", volume = 0.9, soundEnabled = true, vibrate = true, lottieUrl, gifUrl, soundBoomUrl, soundPopUrl }) => {
   const clampedIntensity = Math.max(0.05, Math.min(1, intensity));
   const count = Math.max(24, Math.floor(140 * clampedIntensity));
   const duration = 900 + Math.floor(1300 * clampedIntensity);
@@ -301,7 +301,9 @@ export default function MatchCelebration({ visible, onDone, intensity = 1, theme
       </Animated.View>
     </View>
   );
-}
+};
+
+export default MatchCelebration;
 
 function pickColor(theme: CelebrationTheme): string {
   if (theme === 'hearts') {

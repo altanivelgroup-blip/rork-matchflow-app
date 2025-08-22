@@ -14,6 +14,9 @@ import { backend, VerificationModePref, CaptureChoice } from '@/lib/backend';
 import { useAuth } from '@/contexts/AuthContext';
 import { useI18n } from '@/contexts/I18nContext';
 import { useToast } from '@/contexts/ToastContext';
+import { getFirebase } from '@/lib/firebase';
+import { ref as storageRef, uploadString, type UploadMetadata } from 'firebase/storage';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 type PoseKey = 'front' | 'left' | 'right';
 
@@ -270,7 +273,6 @@ export default function VerifyPhotoScreen() {
     }
 
     try {
-      // Store verification data
       await AsyncStorage.setItem('verification_photos_v1', JSON.stringify(photos));
       await AsyncStorage.setItem('verification_passed_v1', 'true');
       if (typeof result.score === 'number') {
@@ -279,29 +281,57 @@ export default function VerifyPhotoScreen() {
       if (result.faceVector && Array.isArray(result.faceVector)) {
         await AsyncStorage.setItem('face_vector_v1', JSON.stringify(result.faceVector));
       }
-      
-      // Get signup data and create user account
+
       const signupDataStr = await AsyncStorage.getItem('signup:basic');
+      let verifiedUserData: Record<string, unknown> | null = null;
       if (signupDataStr) {
-        const signupData = JSON.parse(signupDataStr);
-        // Store complete verification data
-        const verifiedUserData = {
+        const signupData = JSON.parse(signupDataStr) as Record<string, unknown>;
+        verifiedUserData = {
           ...signupData,
-          verificationScore: result.score,
+          verificationScore: result.score ?? null,
           verificationTimestamp: Date.now(),
-          faceVector: result.faceVector,
-          isVerified: true
-        };
-        
+          faceVector: result.faceVector ?? null,
+          isVerified: true,
+        } as Record<string, unknown>;
         await AsyncStorage.setItem('verified_user_data', JSON.stringify(verifiedUserData));
-        
-        // In a real app, you would send this to your backend
-        console.log('[VerifyPhoto] User verified and ready for account creation:', verifiedUserData);
-        
-        showToast(t('verification.verificationSuccess') ?? 'Verification successful!');
       }
-      
-      // Navigate to profile setup
+
+      try {
+        const { storage, db } = getFirebase();
+        const userId = (user?.email ?? 'guest').replace(/[^a-zA-Z0-9_-]/g, '_');
+        const poseKeys: Array<'front' | 'left' | 'right'> = ['front', 'left', 'right'];
+        for (const k of poseKeys) {
+          const meta = photos[k];
+          if (!meta?.uri) continue;
+          try {
+            const base64 = await FileSystem.readAsStringAsync(meta.uri, { encoding: FileSystem.EncodingType.Base64 });
+            const dataUrl = `data:image/jpeg;base64,${base64}`;
+            const path = `verification/${userId}/${k}-${meta.capturedAt}.jpg`;
+            const sref = storageRef(storage, path);
+            const metadata: UploadMetadata = { contentType: 'image/jpeg', customMetadata: { pose: k, capturedAt: String(meta.capturedAt) } };
+            await uploadString(sref, dataUrl, 'data_url', metadata);
+          } catch (e) {
+            console.log('[VerifyPhoto] upload error', k, e);
+          }
+        }
+        const docRef = doc(db, 'users', userId, 'verification', 'latest');
+        await setDoc(docRef, {
+          userId,
+          score: result.score ?? null,
+          faceVector: result.faceVector ?? null,
+          createdAt: serverTimestamp(),
+          photos: {
+            front: photos.front?.capturedAt ?? null,
+            left: photos.left?.capturedAt ?? null,
+            right: photos.right?.capturedAt ?? null,
+          },
+        });
+        console.log('[VerifyPhoto] uploaded verification to Firebase for', userId);
+      } catch (e) {
+        console.log('[VerifyPhoto] Firebase not configured or failed, skipping cloud save', e);
+      }
+
+      showToast(t('verification.verificationSuccess') ?? 'Verification successful!');
       router.push('/(auth)/profile-setup' as any);
     } catch (e) {
       console.log('[VerifyPhoto] persist photos error', e);
@@ -309,7 +339,7 @@ export default function VerifyPhotoScreen() {
       Alert.alert(t('common.error') ?? 'Error', errorMsg);
       showToast(errorMsg);
     }
-  }, [allReady, photos, resetAll, verifyPhotos]);
+  }, [allReady, photos, resetAll, verifyPhotos, user]);
 
   const resetPose = useCallback((pose: PoseKey) => {
     setPhotos((p) => ({ ...p, [pose]: null }));

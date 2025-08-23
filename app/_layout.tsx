@@ -3,7 +3,7 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, InteractionManager, BackHandler, Platform } from "react-native";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { MatchProvider } from "@/contexts/MatchContext";
 import { MediaProvider } from "@/contexts/MediaContext";
@@ -18,7 +18,7 @@ import { AnalyticsProvider } from "@/contexts/AnalyticsContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import AppSplashScreen from "@/components/SplashScreen";
 import "@/lib/consoleTap";
-import { DIAG } from "@/lib/diagnostics";
+// import { DIAG } from "@/lib/diagnostics";
 
 const RootLayoutNav = React.memo(function RootLayoutNav() {
   return (
@@ -85,7 +85,9 @@ const RootLayoutNav = React.memo(function RootLayoutNav() {
 
 export default function RootLayout() {
   const [queryClient] = useState<QueryClient>(() => new QueryClient());
-  const [showSplash, setShowSplash] = useState<boolean>(false);
+  const [showSplash, setShowSplash] = useState<boolean>(true);
+  const [isAppReady, setIsAppReady] = useState<boolean>(false);
+  const [isSplashAnimDone, setIsSplashAnimDone] = useState<boolean>(false);
   
   const isMountedRef = useRef<boolean>(false);
 
@@ -99,7 +101,14 @@ export default function RootLayout() {
         console.log('[RootLayout] splash hide error', e);
       }
     })();
+    const interaction = InteractionManager.runAfterInteractions(() => {
+      console.log('[RootLayout] interactions complete, app ready');
+      if (isMountedRef.current) setIsAppReady(true);
+    });
     return () => {
+      if (interaction && typeof (interaction as any).cancel === 'function') {
+        (interaction as any).cancel();
+      }
       isMountedRef.current = false;
     };
   }, []);
@@ -109,11 +118,26 @@ export default function RootLayout() {
   const onSplashDone = useMemo(() => () => {
     console.log('[RootLayout] in-app splash complete');
     if (isMountedRef.current) {
-      setShowSplash(false);
+      setIsSplashAnimDone(true);
+      if (isAppReady) {
+        setShowSplash(false);
+      }
     } else {
       console.log('[RootLayout] skip setShowSplash, not mounted');
     }
-  }, []);
+  }, [isAppReady]);
+
+  useEffect(() => {
+    if (showSplash && Platform.OS !== 'web') {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        console.log('[RootLayout] Back press blocked during splash');
+        return true;
+      });
+      return () => {
+        sub.remove();
+      };
+    }
+  }, [showSplash]);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -133,7 +157,7 @@ export default function RootLayout() {
                                 <View style={styles.appContainer} testID="root-app">
                                   <RootLayoutNav />
                                   {showSplash ? (
-                                    <View style={styles.splashOverlay} pointerEvents="none" testID="splash-overlay">
+                                    <View style={styles.splashOverlay} pointerEvents="auto" testID="splash-overlay">
                                       <AppSplashScreen onAnimationComplete={onSplashDone} />
                                     </View>
                                   ) : null}

@@ -8,6 +8,7 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, Stack } from "expo-router";
@@ -47,6 +48,7 @@ export default function ChatScreen() {
   const [messages, setMessages] = useState<MessageUI[]>([]);
   const [typingVisible, setTypingVisible] = useState<boolean>(false);
   const [inputBarHeight, setInputBarHeight] = useState<number>(0);
+  const [sending, setSending] = useState<boolean>(false);
 
   const match = matches.find(m => String(m.id) === String(matchId));
 
@@ -101,9 +103,22 @@ export default function ChatScreen() {
 
   const handleSend = async () => {
     if (!matchId) return;
-    await sendText(String(matchId), inputText, recipientLang);
-    setInputText("");
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+    const text = inputText.trim();
+    if (!text) return;
+    if (sending) return;
+    setSending(true);
+    try {
+      await sendText(String(matchId), text, recipientLang);
+      setInputText("");
+      try {
+        setTyping(String(matchId), false);
+      } catch (_e) {}
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+    } catch (e) {
+      showToast('Failed to send. Please try again.');
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleSetLang = useCallback(async (lang: SupportedLocale) => {
@@ -114,12 +129,22 @@ export default function ChatScreen() {
 
   const handleAttachImage = async () => {
     if (!matchId) return;
-    await sendImage(String(matchId));
+    try {
+      await sendImage(String(matchId));
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
+    } catch (_e) {
+      showToast('Could not attach image.');
+    }
   };
 
   const handleAttachVideo = async () => {
     if (!matchId) return;
-    await sendVideo(String(matchId));
+    try {
+      await sendVideo(String(matchId));
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
+    } catch (_e) {
+      showToast('Could not attach video.');
+    }
   };
 
   const handleReport = useCallback(() => {
@@ -232,8 +257,8 @@ export default function ChatScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? Math.max(insets.top + 64, 80) : 0}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? Math.max(insets.top + 48, 64) : 0}
     >
       <Stack.Screen
         options={{
@@ -375,10 +400,14 @@ export default function ChatScreen() {
         <TouchableOpacity
           style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
           onPress={handleSend}
-          disabled={!inputText.trim() || !matchId}
+          disabled={!inputText.trim() || !matchId || sending}
           testID="send-button"
         >
-          <Send color={inputText.trim() && matchId ? "#FF6B6B" : "#CCC"} size={20} />
+          {sending ? (
+            <ActivityIndicator color="#FF6B6B" size="small" />
+          ) : (
+            <Send color={inputText.trim() && matchId ? "#FF6B6B" : "#CCC"} size={20} />
+          )}
         </TouchableOpacity>
         </View>
       </View>

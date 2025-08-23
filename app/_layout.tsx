@@ -149,8 +149,10 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <Head>
-        <link rel="icon" href="https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/rcichy58jocmp8dwx7g1r" />
-        <link rel="apple-touch-icon" href="https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/rcichy58jocmp8dwx7g1r" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/assets/images/favicon.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/assets/images/favicon.png" />
+        <link rel="shortcut icon" href="/assets/images/favicon.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/assets/images/favicon.png" />
         <meta name="theme-color" content="#ffffff" />
       </Head>
       <GestureHandlerRootView style={{ flex: 1 }}>

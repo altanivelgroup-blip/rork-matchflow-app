@@ -256,25 +256,37 @@ export default function ChatScreen() {
         data={messages}
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.messagesContent}
+        contentContainerStyle={[styles.messagesContent]}
         showsVerticalScrollIndicator={false}
         style={{ flex: 1 }}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-        ListFooterComponent={showTyping ? (
-          <View style={styles.typingRow} testID="typing-indicator">
-            <View style={styles.dot} />
-            <View style={styles.dot} />
-            <View style={styles.dot} />
-            <Text style={styles.typingText}>Typing…</Text>
+        ListEmptyComponent={(
+          <View style={styles.emptyState} testID="empty-chat">
+            <Text style={styles.emptyTitle}>No messages yet</Text>
+            <Text style={styles.emptySubtitle}>Say hi and start the conversation.</Text>
           </View>
-        ) : null}
+        )}
+        ListFooterComponent={(
+          <View>
+            {showTyping ? (
+              <View style={styles.typingRow} testID="typing-indicator">
+                <View style={styles.dot} />
+                <View style={styles.dot} />
+                <View style={styles.dot} />
+                <Text style={styles.typingText}>Typing…</Text>
+              </View>
+            ) : null}
+            <View style={{ height: 12 }} />
+          </View>
+        )}
       />
 
-      <View style={styles.inputContainer}>
+      <View style={styles.inputWrapper}>
         <View style={styles.privacyRow}>
           <Shield color="#2563EB" size={14} />
           <Text style={styles.privacyText}>We use AI to verify photos for your safety.</Text>
         </View>
+        <View style={styles.inputContainer}>
         <TextInput
           style={styles.input}
           placeholder="Type a message..."
@@ -350,11 +362,12 @@ export default function ChatScreen() {
         <TouchableOpacity
           style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
           onPress={handleSend}
-          disabled={!inputText.trim()}
+          disabled={!inputText.trim() || !matchId}
           testID="send-button"
         >
-          <Send color={inputText.trim() ? "#FF6B6B" : "#CCC"} size={20} />
+          <Send color={inputText.trim() && matchId ? "#FF6B6B" : "#CCC"} size={20} />
         </TouchableOpacity>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -429,14 +442,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
   },
+  inputWrapper: {
+    paddingTop: 6,
+    backgroundColor: '#FFF',
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
   inputContainer: {
     flexDirection: "row",
     alignItems: "flex-end",
     paddingHorizontal: 20,
     paddingVertical: 10,
     backgroundColor: "#fff",
-    borderTopWidth: 1,
-    borderTopColor: "#F0F0F0",
     gap: 8,
   },
   input: {
@@ -484,6 +501,21 @@ const styles = StyleSheet.create({
     color: '#444',
     fontWeight: '600',
   },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  emptySubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
   imageAttachment: {
     width: 220,
     height: 160,
@@ -506,19 +538,17 @@ const styles = StyleSheet.create({
     borderColor: "#CCC",
   },
   privacyRow: {
-    position: 'absolute',
-    left: 20,
-    right: 120,
-    bottom: 56,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: '#EFF6FF',
     borderColor: '#DBEAFE',
     borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 10,
+    marginHorizontal: 20,
+    marginBottom: 8,
   },
   privacyText: {
     fontSize: 10,

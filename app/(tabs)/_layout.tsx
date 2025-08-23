@@ -1,4 +1,4 @@
-import { Tabs, Redirect, usePathname } from "expo-router";
+import { Tabs, Redirect } from "expo-router";
 import { Heart, MessageCircle, User, Settings as SettingsIcon, Grid3X3, Globe2 } from "lucide-react-native";
 import React, { useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -6,7 +6,6 @@ import { DIAG } from "@/lib/diagnostics";
 
 export default function TabLayout() {
   const { isAuthenticated } = useAuth();
-  const pathname = usePathname();
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -14,13 +13,8 @@ export default function TabLayout() {
     }
   }, [isAuthenticated]);
 
-
   if (!isAuthenticated) {
     return <Redirect href="/login" />;
-  }
-
-  if (pathname === "/(tabs)") {
-    return <Redirect href="/home" />;
   }
 
   return (

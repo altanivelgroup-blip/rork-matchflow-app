@@ -44,7 +44,8 @@ const SOUND_POP_WAV_FALLBACK = 'https://cdn.freesound.org/previews/341/341695_62
 
 const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, intensity = 1, theme = 'fireworks', message = "It's a Match!", volume = 0.9, soundEnabled = true, vibrate = true, lottieUrl, gifUrl, soundBoomUrl, soundPopUrl, burstMode = 'auto' }) => {
   const clampedIntensity = Math.max(0.05, Math.min(1, intensity));
-  const count = Math.max(24, Math.floor(140 * clampedIntensity));
+  const targetCount = Math.max(24, Math.floor(140 * clampedIntensity));
+  const count = Math.min(80, targetCount);
   const duration = 900 + Math.floor(1300 * clampedIntensity);
 
   const particles = useMemo<Particle[]>(() => {
@@ -92,7 +93,6 @@ const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, in
   useEffect(() => {
     if (!visible) return;
 
-    const anims: Animated.CompositeAnimation[] = [];
     DIAG.push({ level: 'info', scope: 'celebration', code: 'START', message: 'Celebration started', meta: { theme, intensity: clampedIntensity } });
 
     particles.forEach((p, idx) => {
@@ -107,7 +107,7 @@ const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, in
       const fade = Animated.timing(p.opacity, { toValue: 0, duration: duration + 400, easing: Easing.out(Easing.quad), useNativeDriver: false });
       const sc = Animated.timing(p.scale, { toValue: 0.9 + Math.random() * 0.8, duration: Math.min(1000, Math.max(500, duration - 200)), easing: Easing.out(Easing.quad), useNativeDriver: false });
 
-      anims.push(Animated.parallel([move, moveY, rot, fade, sc]));
+      Animated.parallel([move, moveY, rot, fade, sc]).start();
     });
 
     const showLabel = Animated.parallel([
@@ -257,10 +257,17 @@ const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, in
       Animated.timing(ringOpacity, { toValue: 0, duration: 820, easing: Easing.out(Easing.quad), useNativeDriver: false }),
     ]);
 
-    Animated.sequence([shockwave, showLabel, Animated.parallel(anims), hideLabel]).start(({ finished }) => {
-      if (finished) DIAG.push({ level: 'info', scope: 'celebration', code: 'ANIM_DONE', message: 'Celebration animation finished' });
-      if (finished && onDone) onDone();
-    });
+    Animated.sequence([shockwave, showLabel]).start();
+
+    const total = Math.max(duration + 700, 1400);
+    const doneTimer = setTimeout(() => {
+      DIAG.push({ level: 'info', scope: 'celebration', code: 'ANIM_DONE', message: 'Celebration animation finished' });
+      onDone?.();
+    }, total);
+
+    return () => {
+      clearTimeout(doneTimer);
+    };
   }, [visible, particles, duration, labelOpacity, labelY, onDone, vibrate, soundEnabled, volume, clampedIntensity, flashOpacity, ringOpacity, ringScale, soundBoomUrl, soundPopUrl]);
 
   if (!visible) return null;

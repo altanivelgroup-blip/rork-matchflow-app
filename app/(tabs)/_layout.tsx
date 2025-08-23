@@ -5,13 +5,17 @@ import { useAuth } from "@/contexts/AuthContext";
 import { DIAG } from "@/lib/diagnostics";
 
 export default function TabLayout() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isHydrating } = useAuth();
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated && !isHydrating) {
       DIAG.push({ level: 'warn', code: 'NAV_GUARD', scope: 'tabs', message: 'Blocked unauthenticated access to tabs' });
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isHydrating]);
+
+  if (isHydrating) {
+    return null;
+  }
 
   if (!isAuthenticated) {
     return <Redirect href="/login" />;

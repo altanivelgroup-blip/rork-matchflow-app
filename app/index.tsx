@@ -3,11 +3,15 @@ import { Redirect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function Index() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isHydrating } = useAuth();
 
   useEffect(() => {
-    console.log('[index] boot', { isAuthenticated });
-  }, [isAuthenticated]);
+    console.log('[index] boot', { isAuthenticated, isHydrating });
+  }, [isAuthenticated, isHydrating]);
+
+  if (isHydrating) {
+    return null;
+  }
 
   if (isAuthenticated) {
     console.log('[index] redirect -> /home');

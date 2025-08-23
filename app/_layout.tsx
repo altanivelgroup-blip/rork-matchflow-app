@@ -78,6 +78,12 @@ const RootLayoutNav = React.memo(function RootLayoutNav() {
           title: "Diagnostic Test",
         }}
       />
+      <Stack.Screen
+        name="confetti-bomb-test"
+        options={{
+          title: "Confetti Bomb",
+        }}
+      />
       <Stack.Screen name="+not-found" options={{ title: 'Not found' }} />
     </Stack>
   );

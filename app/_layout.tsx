@@ -1,10 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
-import Head from "expo-router/head";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { View, StyleSheet, InteractionManager, BackHandler, Platform } from "react-native";
+import { View, StyleSheet, InteractionManager } from "react-native";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { MatchProvider } from "@/contexts/MatchContext";
 import { MediaProvider } from "@/contexts/MediaContext";
@@ -17,7 +16,6 @@ import { DreamDateProvider } from "@/contexts/DreamDateContext";
 import { NotificationsProvider } from "@/contexts/NotificationsContext";
 import { AnalyticsProvider } from "@/contexts/AnalyticsContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import AppSplashScreen from "@/components/SplashScreen";
 import "@/lib/consoleTap";
 // import { DIAG } from "@/lib/diagnostics";
 
@@ -92,10 +90,10 @@ const RootLayoutNav = React.memo(function RootLayoutNav() {
 
 export default function RootLayout() {
   const [queryClient] = useState<QueryClient>(() => new QueryClient());
-  const [showSplash, setShowSplash] = useState<boolean>(true);
+  const [showSplash, setShowSplash] = useState<boolean>(false);
   const [isAppReady, setIsAppReady] = useState<boolean>(false);
   const [isSplashAnimDone, setIsSplashAnimDone] = useState<boolean>(false);
-  
+
   const isMountedRef = useRef<boolean>(false);
 
   useEffect(() => {
@@ -123,38 +121,15 @@ export default function RootLayout() {
 
 
   const onSplashDone = useMemo(() => () => {
-    console.log('[RootLayout] in-app splash complete');
-    if (isMountedRef.current) {
-      setIsSplashAnimDone(true);
-      if (isAppReady) {
-        setShowSplash(false);
-      }
-    } else {
-      console.log('[RootLayout] skip setShowSplash, not mounted');
-    }
-  }, [isAppReady]);
+    console.log('[RootLayout] in-app splash disabled');
+    setIsSplashAnimDone(true);
+  }, []);
 
-  useEffect(() => {
-    if (showSplash && Platform.OS !== 'web') {
-      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-        console.log('[RootLayout] Back press blocked during splash');
-        return true;
-      });
-      return () => {
-        sub.remove();
-      };
-    }
-  }, [showSplash]);
+
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Head>
-        <link rel="icon" type="image/png" sizes="32x32" href="https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/ej8wpdgrhkud76f3w6rio" />
-        <link rel="icon" type="image/png" sizes="16x16" href="https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/ej8wpdgrhkud76f3w6rio" />
-        <link rel="shortcut icon" href="https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/ej8wpdgrhkud76f3w6rio" />
-        <link rel="apple-touch-icon" sizes="180x180" href="https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/ej8wpdgrhkud76f3w6rio" />
-        <meta name="theme-color" content="#ffffff" />
-      </Head>
+
       <GestureHandlerRootView style={{ flex: 1 }}>
         <I18nProvider>
           <AuthProvider>
@@ -170,11 +145,7 @@ export default function RootLayout() {
                               <NotificationsProvider>
                                 <View style={styles.appContainer} testID="root-app">
                                   <RootLayoutNav />
-                                  {showSplash ? (
-                                    <View style={styles.splashOverlay} pointerEvents="auto" testID="splash-overlay">
-                                      <AppSplashScreen onAnimationComplete={onSplashDone} />
-                                    </View>
-                                  ) : null}
+
                                 </View>
                               </NotificationsProvider>
                             </AnalyticsProvider>
@@ -197,11 +168,5 @@ const styles = StyleSheet.create({
   appContainer: {
     flex: 1,
     backgroundColor: '#fff',
-  },
-  splashOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent',
-    justifyContent: 'center',
-    alignItems: 'center',
   }
 });

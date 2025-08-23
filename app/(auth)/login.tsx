@@ -49,9 +49,6 @@ export default function LoginScreen() {
     }
     setLoading(true);
     try {
-      // Check if user has completed verification
-      const verificationPassed = await AsyncStorage.getItem('verification_passed_v1');
-      
       let loc: { lat: number; lon: number; city?: string } | undefined;
       try {
         if (Platform.OS === 'web' && navigator.geolocation) {
@@ -72,13 +69,7 @@ export default function LoginScreen() {
       
       await login({ email, name: email.split("@")[0], location: loc });
       
-      // Redirect based on verification status
-      if (verificationPassed === 'true') {
-        router.replace("/(tabs)");
-      } else {
-        // User needs to complete verification flow
-        router.replace("/verify-photo" as any);
-      }
+      router.replace("/(tabs)");
     } catch (e) {
       Alert.alert(i18nProxy.t('errors.loginFailed') ?? 'Sign in failed', i18nProxy.t('errors.tryAgain') ?? 'Please try again.');
     } finally {

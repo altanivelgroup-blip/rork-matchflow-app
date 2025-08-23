@@ -29,18 +29,11 @@ export default function ProfileSetupScreen() {
     let mounted = true;
     (async () => {
       try {
-        const flag = await AsyncStorage.getItem('verification_passed_v1');
         if (!mounted) return;
-        if (flag !== 'true') {
-          alert('Please complete photo verification first.');
-          router.replace('/(auth)/verify-photo' as any);
-        } else {
-          setVerified(true);
-        }
+        setVerified(true);
       } catch (e) {
-        console.log('[ProfileSetup] verify gate error', e);
-        alert('Could not confirm verification. Please retry.');
-        router.replace('/(auth)/verify-photo' as any);
+        console.log('[ProfileSetup] init error', e);
+        setVerified(true);
       }
     })();
     return () => { mounted = false; };

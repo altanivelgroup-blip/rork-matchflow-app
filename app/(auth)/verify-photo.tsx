@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useI18n } from '@/contexts/I18nContext';
 import { useToast } from '@/contexts/ToastContext';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { DIAG } from '@/lib/diagnostics';
 
 type ExpressionKey = 'neutral' | 'smile' | 'sad';
 

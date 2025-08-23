@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack, useRootNavigationState } from "expo-router";
+import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -85,8 +85,8 @@ const RootLayoutNav = React.memo(function RootLayoutNav() {
 
 export default function RootLayout() {
   const [queryClient] = useState<QueryClient>(() => new QueryClient());
-  const [showSplash, setShowSplash] = useState<boolean>(true);
-  const navState = useRootNavigationState();
+  const [showSplash, setShowSplash] = useState<boolean>(false);
+  
   const isMountedRef = useRef<boolean>(false);
 
   useEffect(() => {
@@ -104,15 +104,7 @@ export default function RootLayout() {
     };
   }, []);
 
-  useEffect(() => {
-    try {
-      if (navState?.key) {
-        DIAG.push({ level: 'info', code: 'NAV_READY', scope: 'router', message: 'Navigation ready', meta: { key: navState.key } });
-      }
-    } catch (e) {
-      console.log('[RootLayout] nav diag error', e);
-    }
-  }, [navState?.key]);
+
 
   const onSplashDone = useMemo(() => () => {
     console.log('[RootLayout] in-app splash complete');

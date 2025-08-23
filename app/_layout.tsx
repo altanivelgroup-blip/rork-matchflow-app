@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useMemo, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -18,6 +18,7 @@ import { AnalyticsProvider } from "@/contexts/AnalyticsContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import AppSplashScreen from "@/components/SplashScreen";
 import "@/lib/consoleTap";
+import { DIAG } from "@/lib/diagnostics";
 
 const RootLayoutNav = React.memo(function RootLayoutNav() {
   return (
@@ -77,6 +78,7 @@ const RootLayoutNav = React.memo(function RootLayoutNav() {
           title: "Diagnostic Test",
         }}
       />
+      <Stack.Screen name="+not-found" options={{ title: 'Not found' }} />
     </Stack>
   );
 });
@@ -84,6 +86,7 @@ const RootLayoutNav = React.memo(function RootLayoutNav() {
 export default function RootLayout() {
   const [queryClient] = useState<QueryClient>(() => new QueryClient());
   const [showSplash, setShowSplash] = useState<boolean>(true);
+  const pathname = usePathname();
 
   useEffect(() => {
     (async () => {
@@ -95,6 +98,12 @@ export default function RootLayout() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (pathname) {
+      DIAG.push({ level: 'info', code: 'NAV_ROUTE', scope: 'router', message: 'Route changed', meta: { pathname } });
+    }
+  }, [pathname]);
 
   const onSplashDone = useMemo(() => () => {
     console.log('[RootLayout] in-app splash complete');

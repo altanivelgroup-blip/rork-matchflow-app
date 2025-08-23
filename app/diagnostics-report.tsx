@@ -3,39 +3,13 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from '
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Bug, Copy, RefreshCcw, Play } from 'lucide-react-native';
-
-interface LogEntry {
-  id: string;
-  ts: number;
-  level: 'info' | 'warn' | 'error';
-  code: string;
-  scope: string;
-  message: string;
-  meta?: Record<string, unknown>;
-}
+import { DIAG, type DiagEntry } from '@/lib/diagnostics';
 
 const formatTs = (ts: number): string => new Date(ts).toLocaleString();
 
-export type { LogEntry };
-
-export const DIAG = {
-  buffer: [] as LogEntry[],
-  push(entry: Omit<LogEntry, 'id' | 'ts'>) {
-    const id = `${Date.now()}-${Math.random()}`;
-    const item: LogEntry = { id, ts: Date.now(), ...entry };
-    this.buffer.push(item);
-    if (this.buffer.length > 500) this.buffer = this.buffer.slice(-500);
-    const tag = `[${entry.level.toUpperCase()}][${entry.scope}][${entry.code}]`;
-    console.log(tag, entry.message, entry.meta ?? {});
-  },
-  snapshot() {
-    return [...this.buffer];
-  }
-};
-
 export default function DiagnosticsReport() {
   const router = useRouter();
-  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [logs, setLogs] = useState<DiagEntry[]>([]);
   const [filter, setFilter] = useState<'all' | 'errors' | 'warnings'>('all');
 
   useEffect(() => {

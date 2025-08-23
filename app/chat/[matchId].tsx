@@ -46,6 +46,7 @@ export default function ChatScreen() {
   const [showLangPicker, setShowLangPicker] = useState<boolean>(false);
   const [messages, setMessages] = useState<MessageUI[]>([]);
   const [typingVisible, setTypingVisible] = useState<boolean>(false);
+  const [inputBarHeight, setInputBarHeight] = useState<number>(0);
 
   const match = matches.find(m => String(m.id) === String(matchId));
 
@@ -231,8 +232,8 @@ export default function ChatScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? Math.max(insets.top + 48, 64) : 0}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? Math.max(insets.top + 64, 80) : 0}
     >
       <Stack.Screen
         options={{
@@ -262,8 +263,11 @@ export default function ChatScreen() {
         data={messages}
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[styles.messagesContent]}
+        contentContainerStyle={[styles.messagesContent, { paddingBottom: Math.max(inputBarHeight, 24) }]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
         style={{ flex: 1 }}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
         ListEmptyComponent={(
@@ -287,7 +291,10 @@ export default function ChatScreen() {
         )}
       />
 
-      <View style={[styles.inputWrapper, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      <View style={[styles.inputWrapper, { paddingBottom: Math.max(insets.bottom, 8) }]} onLayout={(e) => {
+        const h = e.nativeEvent.layout.height;
+        if (typeof h === 'number') setInputBarHeight(h);
+      }}>
         <View style={styles.privacyRow}>
           <Shield color="#2563EB" size={14} />
           <Text style={styles.privacyText}>We use AI to verify photos for your safety.</Text>

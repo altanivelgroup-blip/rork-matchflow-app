@@ -1,16 +1,13 @@
 import React, { useEffect } from 'react';
-import { Redirect, useRootNavigationState } from 'expo-router';
+import { Redirect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function Index() {
   const { isAuthenticated } = useAuth();
-  const root = useRootNavigationState();
 
   useEffect(() => {
-    console.log('[index] boot', { key: root?.key, isAuthenticated });
-  }, [root?.key, isAuthenticated]);
-
-  if (!root?.key) return null;
+    console.log('[index] boot', { isAuthenticated });
+  }, [isAuthenticated]);
 
   if (isAuthenticated) {
     console.log('[index] redirect -> /(tabs)/home');

@@ -114,8 +114,8 @@ export default function SignupScreen() {
       await AsyncStorage.setItem('signup:basic', JSON.stringify(signupData));
       await analytics.track('sign_up', { locale, age: Number(age), country: locationText || 'unknown' });
       
-      // Navigate to permissions prompt first
-      router.push("/(auth)/permissions-prompt" as any);
+      // Proceed directly to profile setup (facial verification disabled)
+      router.push("/(auth)/profile-setup" as any);
     } catch (e) {
       console.log('[Signup] error:', e);
       Alert.alert(i18nProxy.t('errors.signupFailed') ?? 'Signup failed', i18nProxy.t('errors.tryAgain') ?? 'Please try again.');
@@ -199,7 +199,7 @@ export default function SignupScreen() {
               >
                 {loading ? <ActivityIndicator color="#fff" /> : null}
                 <Text style={styles.signupButtonText}>
-                  {i18nProxy.t('auth.continueToVerification') ?? 'Continue to Verification'}
+                  {i18nProxy.t('auth.continueToVerification') ?? 'Continue'}
                 </Text>
               </TouchableOpacity>
 

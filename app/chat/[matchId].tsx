@@ -198,7 +198,6 @@ export default function ChatScreen() {
             styles.messageText,
             item.sender === 'user' ? styles.userMessageText : styles.matchMessageText,
           ]}
-          numberOfLines={0}
         >
           {displayText}
         </Text>
@@ -259,12 +258,13 @@ export default function ChatScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.messagesContent}
         showsVerticalScrollIndicator={false}
+        style={{ flex: 1 }}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
         ListFooterComponent={showTyping ? (
           <View style={styles.typingRow} testID="typing-indicator">
             <View style={styles.dot} />
-            <View style={[styles.dot, { animationDelay: '150ms' as unknown as number }]} />
-            <View style={[styles.dot, { animationDelay: '300ms' as unknown as number }]} />
+            <View style={styles.dot} />
+            <View style={styles.dot} />
             <Text style={styles.typingText}>Typing…</Text>
           </View>
         ) : null}

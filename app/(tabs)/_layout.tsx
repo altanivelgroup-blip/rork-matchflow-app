@@ -6,7 +6,6 @@ import { DIAG } from "@/lib/diagnostics";
 
 export default function TabLayout() {
   const { isAuthenticated } = useAuth();
-  // const router = useRouter();
   const rootNavigationState = useRootNavigationState();
 
   useEffect(() => {
@@ -21,7 +20,7 @@ export default function TabLayout() {
   }
 
   if (!isAuthenticated) {
-    return <Redirect href="/(auth)/login" />;
+    return <Redirect href="/login" />;
   }
 
   return (

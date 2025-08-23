@@ -10,10 +10,10 @@ export default function Index() {
   }, [isAuthenticated]);
 
   if (isAuthenticated) {
-    console.log('[index] redirect -> /(tabs)/home');
-    return <Redirect href="/(tabs)/home" />;
+    console.log('[index] redirect -> /home');
+    return <Redirect href="/home" />;
   }
 
-  console.log('[index] redirect -> /(auth)/login');
-  return <Redirect href="/(auth)/login" />;
+  console.log('[index] redirect -> /login');
+  return <Redirect href="/login" />;
 }

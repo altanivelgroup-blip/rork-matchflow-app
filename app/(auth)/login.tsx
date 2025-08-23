@@ -69,7 +69,7 @@ export default function LoginScreen() {
       
       await login({ email, name: email.split("@")[0], location: loc });
       
-      router.replace("/(tabs)");
+      router.replace("/home");
     } catch (e) {
       Alert.alert(i18nProxy.t('errors.loginFailed') ?? 'Sign in failed', i18nProxy.t('errors.tryAgain') ?? 'Please try again.');
     } finally {
@@ -81,7 +81,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login({ email: `google_user@example.com`, name: 'Google User' });
-      router.replace('/(tabs)');
+      router.replace('/home');
     } catch (e) {
       Alert.alert('Google sign-in failed');
     } finally {
@@ -93,7 +93,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login({ email: `apple_user@example.com`, name: 'Apple User' });
-      router.replace('/(tabs)');
+      router.replace('/home');
     } catch (e) {
       Alert.alert('Apple sign-in failed');
     } finally {

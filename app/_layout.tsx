@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack, usePathname } from "expo-router";
+import { Stack, useRootNavigationState } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { View, StyleSheet } from "react-native";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -86,9 +86,11 @@ const RootLayoutNav = React.memo(function RootLayoutNav() {
 export default function RootLayout() {
   const [queryClient] = useState<QueryClient>(() => new QueryClient());
   const [showSplash, setShowSplash] = useState<boolean>(true);
-  const pathname = usePathname();
+  const navState = useRootNavigationState();
+  const isMountedRef = useRef<boolean>(false);
 
   useEffect(() => {
+    isMountedRef.current = true;
     (async () => {
       try {
         await SplashScreen.hideAsync();
@@ -97,19 +99,28 @@ export default function RootLayout() {
         console.log('[RootLayout] splash hide error', e);
       }
     })();
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
 
   useEffect(() => {
-    if (pathname) {
-      DIAG.push({ level: 'info', code: 'NAV_ROUTE', scope: 'router', message: 'Route changed', meta: { pathname } });
+    try {
+      if (navState?.key) {
+        DIAG.push({ level: 'info', code: 'NAV_READY', scope: 'router', message: 'Navigation ready', meta: { key: navState.key } });
+      }
+    } catch (e) {
+      console.log('[RootLayout] nav diag error', e);
     }
-  }, [pathname]);
-
-
+  }, [navState?.key]);
 
   const onSplashDone = useMemo(() => () => {
     console.log('[RootLayout] in-app splash complete');
-    setShowSplash(false);
+    if (isMountedRef.current) {
+      setShowSplash(false);
+    } else {
+      console.log('[RootLayout] skip setShowSplash, not mounted');
+    }
   }, []);
 
   return (

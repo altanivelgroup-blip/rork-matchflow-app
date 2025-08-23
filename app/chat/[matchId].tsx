@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, Stack } from "expo-router";
 import { Image as ExpoImage } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
@@ -37,6 +38,7 @@ export default function ChatScreen() {
   const { enabled: tEnabled, setEnabled: setTEnabled, translate, targetLang } = useTranslate();
   const { sessions } = useDreamDate();
   const [inputText, setInputText] = useState<string>("");
+  const insets = useSafeAreaInsets();
   const flatListRef = useRef<FlatList>(null);
   const [translatedMap, setTranslatedMap] = useState<Record<string, { translated: string; detected: string }>>({});
   const [failedMap, setFailedMap] = useState<Record<string, boolean>>({});
@@ -225,8 +227,8 @@ export default function ChatScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={90}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
     >
       <Stack.Screen
         options={{
@@ -281,7 +283,7 @@ export default function ChatScreen() {
         )}
       />
 
-      <View style={styles.inputWrapper}>
+      <View style={[styles.inputWrapper, { paddingBottom: Math.max(insets.bottom, 8) }]}>
         <View style={styles.privacyRow}>
           <Shield color="#2563EB" size={14} />
           <Text style={styles.privacyText}>We use AI to verify photos for your safety.</Text>

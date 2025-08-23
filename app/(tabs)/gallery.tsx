@@ -436,7 +436,7 @@ export default function GalleryScreen() {
   const [previewMode, setPreviewMode] = useState<boolean>(isTablet);
   const [previewProfile, setPreviewProfile] = useState<MockProfile | null>(null);
   const [devBypass, setDevBypass] = useState<boolean>(!isTablet);
-  const [tempIntensity, setTempIntensity] = useState<number>(7);
+  const [tempIntensity, setTempIntensity] = useState<number>(7); // 1-10 persistent intensity
   const [devBarOpen, setDevBarOpen] = useState<boolean>(!isTablet);
   
   const { addMatch } = useMatches();
@@ -445,6 +445,33 @@ export default function GalleryScreen() {
   const { enabled: tEnabled, translate, targetLang } = useTranslate();
   const { limits, canSwipe, swipeState, incSwipe } = useMembership();
   const [darkMode, setDarkMode] = useState<boolean>(false);
+  
+  // Load saved intensity
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem('mf:intensity');
+        if (saved) {
+          const v = Number(saved);
+          if (!Number.isNaN(v) && v >= 1 && v <= 10) {
+            setTempIntensity(v);
+          }
+        }
+      } catch (e) {
+        console.log('[Gallery] load intensity error', e);
+      }
+    })();
+  }, []);
+  
+  useEffect(() => {
+    (async () => {
+      try {
+        await AsyncStorage.setItem('mf:intensity', String(tempIntensity));
+      } catch (e) {
+        console.log('[Gallery] save intensity error', e);
+      }
+    })();
+  }, [tempIntensity]);
   
   // AI compatibility scoring (fallback to mock data if AI service unavailable)
   const aiQuery = useQuery<{ scores: { id: string; score: number; reason: string }[] }, Error>({
@@ -867,16 +894,18 @@ export default function GalleryScreen() {
   };
   
   const DevSlider: React.FC<{ value: number; onChange: (v: number) => void }> = ({ value, onChange }) => {
-    const trackWidth = useRef<number>(0);
+    const [trackWidth, setTrackWidth] = useState<number>(0);
     const knobX = useRef(new Animated.Value(0)).current;
     const baseXRef = useRef<number>(0);
 
+    const maxRange = Math.max(0, trackWidth - 24);
+
     useEffect(() => {
-      const pos = ((value - 1) / 9) * (Math.max(0, trackWidth.current - 24));
+      const pos = ((value - 1) / 9) * maxRange;
       if (!isNaN(pos)) {
-        Animated.timing(knobX, { toValue: pos, duration: 120, easing: Easing.out(Easing.quad), useNativeDriver: false }).start();
+        knobX.setValue(pos);
       }
-    }, [value, knobX]);
+    }, [value, maxRange, knobX]);
 
     const getKnobValue = (): number => {
       const anyVal = knobX as unknown as { __getValue?: () => number; _value?: number };
@@ -890,9 +919,9 @@ export default function GalleryScreen() {
         onMoveShouldSetPanResponder: () => true,
         onPanResponderGrant: () => { baseXRef.current = getKnobValue(); },
         onPanResponderMove: (_: GestureResponderEvent, g: PanResponderGestureState) => {
-          const dx = Math.max(0, Math.min((Math.max(0, trackWidth.current - 24)), baseXRef.current + g.dx));
+          const dx = Math.max(0, Math.min(maxRange, baseXRef.current + g.dx));
           knobX.setValue(dx);
-          const denom = Math.max(1, trackWidth.current - 24);
+          const denom = Math.max(1, maxRange);
           const ratio = dx / denom;
           const val = Math.round(1 + ratio * 9);
           onChange(val);
@@ -903,7 +932,7 @@ export default function GalleryScreen() {
     ).current;
 
     return (
-      <View style={styles.sliderRow} onLayout={(e) => { trackWidth.current = e.nativeEvent.layout.width; }}>
+      <View style={styles.sliderRow} onLayout={(e) => { setTrackWidth(e.nativeEvent.layout.width); }}>
         <View style={styles.sliderTrack} />
         <Animated.View style={[styles.sliderKnob, { left: knobX }]} {...pan.panHandlers} testID="dev-slider-knob" />
       </View>
@@ -984,7 +1013,10 @@ export default function GalleryScreen() {
       {devBarOpen && (
         <View style={styles.devBar} testID="devbar">
           <Text style={styles.devBarText}>Intensity {tempIntensity}/10</Text>
-          <DevSlider value={tempIntensity} onChange={setTempIntensity} />
+          <DevSlider value={tempIntensity} onChange={(v) => {
+            const clamped = Math.max(1, Math.min(10, v));
+            setTempIntensity(clamped);
+          }} />
           <Text style={styles.devBarHint}>Tap any profile image to trigger fireworks + sound</Text>
         </View>
       )}

@@ -39,41 +39,45 @@ export default function ChatScreen() {
   const { sessions } = useDreamDate();
   const [inputText, setInputText] = useState<string>("");
   const insets = useSafeAreaInsets();
-  const flatListRef = useRef<FlatList>(null);
+  const flatListRef = useRef<FlatList<MessageUI>>(null);
   const [translatedMap, setTranslatedMap] = useState<Record<string, { translated: string; detected: string }>>({});
   const [failedMap, setFailedMap] = useState<Record<string, boolean>>({});
   const [showTranslated, setShowTranslated] = useState<boolean>(true);
   const [showLangPicker, setShowLangPicker] = useState<boolean>(false);
+  const [messages, setMessages] = useState<MessageUI[]>([]);
+  const [typingVisible, setTypingVisible] = useState<boolean>(false);
 
   const match = matches.find(m => String(m.id) === String(matchId));
 
-  const messages: MessageUI[] = useMemo(() => {
-    if (!matchId) return [] as MessageUI[];
-    return getMessages(String(matchId)) as unknown as MessageUI[];
-  }, [getMessages, matchId]);
+  useEffect(() => {
+    if (!matchId) return;
+    const id = String(matchId);
+    const update = () => {
+      const next = getMessages(id) as unknown as MessageUI[];
+      setMessages(next);
+      setTypingVisible(isTyping(id));
+    };
+    update();
+    const unsub = subscribe(id, () => {
+      update();
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+    });
+    return unsub;
+  }, [getMessages, isTyping, matchId, subscribe]);
 
   const lastUserMessageId = useMemo(() => {
     const list = messages.filter(m => m.sender === 'user');
     return list.length ? list[list.length - 1]?.id : undefined;
   }, [messages]);
 
-  const showTyping = useMemo(() => {
-    if (!matchId) return false;
-    return isTyping(String(matchId));
-  }, [isTyping, matchId]);
+  
 
   const recipientLang: SupportedLocale | undefined = useMemo(() => {
     if (!matchId) return undefined;
     return getPreferredLang(String(matchId));
   }, [getPreferredLang, matchId]);
 
-  useEffect(() => {
-    if (!matchId) return;
-    const unsub = subscribe(String(matchId), () => {
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
-    });
-    return unsub;
-  }, [matchId, subscribe]);
+
 
   useEffect(() => {
     const run = async () => {
@@ -228,7 +232,7 @@ export default function ChatScreen() {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? Math.max(insets.top + 48, 64) : 0}
     >
       <Stack.Screen
         options={{
@@ -270,7 +274,7 @@ export default function ChatScreen() {
         )}
         ListFooterComponent={(
           <View>
-            {showTyping ? (
+            {typingVisible ? (
               <View style={styles.typingRow} testID="typing-indicator">
                 <View style={styles.dot} />
                 <View style={styles.dot} />

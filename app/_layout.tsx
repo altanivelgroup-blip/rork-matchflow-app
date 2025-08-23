@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack, usePathname, useRootNavigationState } from "expo-router";
+import { Stack, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useMemo, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { View, StyleSheet, BackHandler, Platform } from "react-native";
+import { View, StyleSheet } from "react-native";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { MatchProvider } from "@/contexts/MatchContext";
 import { MediaProvider } from "@/contexts/MediaContext";
@@ -87,7 +87,6 @@ export default function RootLayout() {
   const [queryClient] = useState<QueryClient>(() => new QueryClient());
   const [showSplash, setShowSplash] = useState<boolean>(true);
   const pathname = usePathname();
-  const rootNavigationState = useRootNavigationState();
 
   useEffect(() => {
     (async () => {
@@ -106,22 +105,7 @@ export default function RootLayout() {
     }
   }, [pathname]);
 
-  useEffect(() => {
-    if (Platform.OS !== 'android') return;
-    if (!rootNavigationState?.key) return;
-    const onBackPress = () => {
-      const canGoBack = (rootNavigationState?.index ?? 0) > 0;
-      console.log('[RootLayout] hardwareBackPress', { canGoBack, index: rootNavigationState?.index });
-      if (!canGoBack) {
-        return true;
-      }
-      return false;
-    };
-    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-    return () => {
-      sub.remove();
-    };
-  }, [rootNavigationState?.key, rootNavigationState?.index]);
+
 
   const onSplashDone = useMemo(() => () => {
     console.log('[RootLayout] in-app splash complete');

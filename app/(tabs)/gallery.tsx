@@ -437,7 +437,7 @@ export default function GalleryScreen() {
   const [previewProfile, setPreviewProfile] = useState<MockProfile | null>(null);
   const [devBypass, setDevBypass] = useState<boolean>(!isTablet);
   const [tempIntensity, setTempIntensity] = useState<number>(7); // 1-10 persistent intensity
-  const [devBarOpen, setDevBarOpen] = useState<boolean>(!isTablet);
+  const [devBarOpen, setDevBarOpen] = useState<boolean>(true);
   
   const { addMatch } = useMatches();
   const analytics = useAnalytics();
@@ -714,60 +714,48 @@ export default function GalleryScreen() {
 
   const onPressCardGuarded = useCallback((profile: MockProfile) => {
     try {
-      const score = aiScoresMap[profile.id] ?? profile.aiCompatibilityScore ?? 85;
-      const base = Math.max(0.3, Math.min(1, score / 100));
-      const userMul = Math.max(0.1, Math.min(1, tempIntensity / 10));
-      const intensity = Math.max(0.2, Math.min(1, base * userMul));
-
-      if (devBypass) {
-        setCelebration({ visible: true, intensity, theme: 'fireworks', message: `Dev Match with ${profile.name}` });
-        setTimeout(() => setCelebration(c => ({ ...c, visible: false })), 2500);
-        void playClickFx(intensity > 0.7 ? 'boom' : 'pop', tempIntensity);
-        return;
-      }
-
-      if (previewMode) {
-        setCelebration({ visible: true, intensity, theme: 'fireworks', message: `Match with ${profile.name}` });
-        setTimeout(() => setCelebration(c => ({ ...c, visible: false })), 2200);
-        void playClickFx(intensity > 0.7 ? 'boom' : 'pop', tempIntensity);
-        setPreviewProfile(profile);
-        return;
-      }
-
-      setCelebration({ visible: true, intensity, theme: 'fireworks', message: `Match with ${profile.name}` });
-      setTimeout(() => setCelebration(c => ({ ...c, visible: false })), 2200);
-      void playClickFx(intensity > 0.7 ? 'boom' : 'pop', tempIntensity);
       setPreviewProfile(profile);
     } catch (e) {
       console.log('[Gallery] onPressCardGuarded error', e);
     }
-  }, [devBypass, aiScoresMap, tempIntensity, previewMode, playClickFx]);
+  }, []);
   
   const handleLike = useCallback(async (profile: MockProfile) => {
     if (!canSwipe) {
       setShowUpgrade(true);
       return;
     }
-    
+
     if (processingIds.has(profile.id)) {
       return;
     }
-    
+
+    try {
+      if (animationsEnabled) {
+        const score = aiQuery.data?.scores?.find(s => s.id === profile.id)?.score ?? profile.aiCompatibilityScore ?? 70;
+        const intensity = Math.max(0.3, Math.min(1, score / 100));
+        setCelebration({ visible: true, intensity, theme: 'fireworks', message: `Liked ${profile.name}!` });
+        setTimeout(() => setCelebration(c => ({ ...c, visible: false })), 2200);
+      }
+    } catch (e) {
+      console.log('[Gallery] like celebrate error', e);
+    }
+
     // Add to processing set
     setProcessingIds(prev => new Set([...prev, profile.id]));
-    
+
     try {
       await incSwipe();
-      
+
       const uid = user?.email ?? 'guest';
       const res = await backend.recordLike(uid, profile.id);
       await analytics.track('match_like', { profileId: profile.id, country: profile.location?.city ?? 'unknown' });
-      
+
       const newLiked = new Set(likedIds);
       newLiked.add(profile.id);
       setLikedIds(newLiked);
       await persistLiked(newLiked);
-      
+
       if (res.mutual) {
         addMatch({
           id: profile.id,
@@ -777,27 +765,12 @@ export default function GalleryScreen() {
           image: profile.image,
           interests: [...profile.interests],
         });
-        
-        if (animationsEnabled) {
-          const score = aiQuery.data?.scores?.find(s => s.id === profile.id)?.score ?? 65;
-          // Use fireworks for high compatibility matches
-          const theme = score >= 80 ? 'fireworks' : score >= 60 ? 'hearts' : 'confetti';
-          setCelebration({ 
-            visible: true, 
-            intensity: Math.max(0.5, Math.min(1, score / 100)), 
-            theme, 
-            message: `🎉 Perfect Match with ${profile.name}!` 
-          });
-          setTimeout(() => setCelebration(c => ({ ...c, visible: false })), 3000);
-        }
-        
         setMatchModal({ visible: true, profile });
         await analytics.track('match_mutual', { profileId: profile.id, country: profile.location?.city ?? 'unknown' });
       }
     } catch (e) {
       console.log('[Gallery] like error', e);
     } finally {
-      // Remove from processing set after a delay to show the animation
       setTimeout(() => {
         setProcessingIds(prev => {
           const newSet = new Set(prev);
@@ -1012,12 +985,12 @@ export default function GalleryScreen() {
       {/* Dev Tools Bar */}
       {devBarOpen && (
         <View style={styles.devBar} testID="devbar">
-          <Text style={styles.devBarText}>Intensity {tempIntensity}/10</Text>
+          <Text style={styles.devBarText}>Effects intensity {tempIntensity}/10</Text>
           <DevSlider value={tempIntensity} onChange={(v) => {
             const clamped = Math.max(1, Math.min(10, v));
             setTempIntensity(clamped);
           }} />
-          <Text style={styles.devBarHint}>Tap any profile image to trigger fireworks + sound</Text>
+          <Text style={styles.devBarHint}>Fireworks show after you press Like</Text>
         </View>
       )}
 

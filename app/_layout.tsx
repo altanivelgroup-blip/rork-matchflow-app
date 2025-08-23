@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
+import Head from "expo-router/head";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -147,6 +148,11 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <Head>
+        <link rel="icon" href="https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/rcichy58jocmp8dwx7g1r" />
+        <link rel="apple-touch-icon" href="https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/rcichy58jocmp8dwx7g1r" />
+        <meta name="theme-color" content="#ffffff" />
+      </Head>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <I18nProvider>
           <AuthProvider>

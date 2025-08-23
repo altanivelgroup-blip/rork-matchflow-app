@@ -13,10 +13,10 @@ export default function Index() {
   if (!root?.key) return null;
 
   if (isAuthenticated) {
-    console.log('[index] redirect -> /(tabs)');
-    return <Redirect href="/(tabs)" />;
+    console.log('[index] redirect -> /home');
+    return <Redirect href="/home" />;
   }
 
-  console.log('[index] redirect -> /(auth)/login');
-  return <Redirect href="/(auth)/login" />;
+  console.log('[index] redirect -> /login');
+  return <Redirect href="/login" />;
 }

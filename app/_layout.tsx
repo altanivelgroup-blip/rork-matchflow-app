@@ -4,6 +4,7 @@ import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { View, StyleSheet, InteractionManager } from "react-native";
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from "@/contexts/AuthContext";
 import { MatchProvider } from "@/contexts/MatchContext";
 import { MediaProvider } from "@/contexts/MediaContext";
@@ -131,34 +132,36 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
 
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <I18nProvider>
-          <AuthProvider>
-            <MatchProvider>
-              <MembershipProvider>
-                <TranslateProvider>
-                  <DreamDateProvider>
-                    <MediaProvider>
-                      <ChatProvider>
-                        <ToastProvider>
-                          <ErrorBoundary>
-                            <AnalyticsProvider>
-                              <NotificationsProvider>
-                                <View style={styles.appContainer} testID="root-app">
-                                  <RootLayoutNav />
+        <SafeAreaProvider>
+          <I18nProvider>
+            <AuthProvider>
+              <MatchProvider>
+                <MembershipProvider>
+                  <TranslateProvider>
+                    <DreamDateProvider>
+                      <MediaProvider>
+                        <ChatProvider>
+                          <ToastProvider>
+                            <ErrorBoundary>
+                              <AnalyticsProvider>
+                                <NotificationsProvider>
+                                  <View style={styles.appContainer} testID="root-app">
+                                    <RootLayoutNav />
 
-                                </View>
-                              </NotificationsProvider>
-                            </AnalyticsProvider>
-                          </ErrorBoundary>
-                        </ToastProvider>
-                      </ChatProvider>
-                    </MediaProvider>
-                  </DreamDateProvider>
-                </TranslateProvider>
-              </MembershipProvider>
-            </MatchProvider>
-          </AuthProvider>
-        </I18nProvider>
+                                  </View>
+                                </NotificationsProvider>
+                              </AnalyticsProvider>
+                            </ErrorBoundary>
+                          </ToastProvider>
+                        </ChatProvider>
+                      </MediaProvider>
+                    </DreamDateProvider>
+                  </TranslateProvider>
+                </MembershipProvider>
+              </MatchProvider>
+            </AuthProvider>
+          </I18nProvider>
+        </SafeAreaProvider>
       </GestureHandlerRootView>
     </QueryClientProvider>
   );

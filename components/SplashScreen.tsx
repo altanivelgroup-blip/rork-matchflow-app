@@ -98,7 +98,7 @@ export default function SplashScreen({ onAnimationComplete }: SplashScreenProps)
         accessibilityLabel="splash-logo-container"
       >
         <Image
-          source={{ uri: 'https://r2-pub.rork.com/generated-images/295c751b-386b-4efe-8904-f8d86c28253a.png' }}
+          source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/ej8wpdgrhkud76f3w6rio' }}
           style={styles.logo}
           resizeMode="contain"
           accessibilityIgnoresInvertColors
@@ -140,7 +140,7 @@ export default function SplashScreen({ onAnimationComplete }: SplashScreenProps)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
   },

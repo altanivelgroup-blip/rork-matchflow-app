@@ -149,10 +149,10 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <Head>
-        <link rel="icon" type="image/png" sizes="32x32" href="/assets/images/favicon.png" />
-        <link rel="icon" type="image/png" sizes="16x16" href="/assets/images/favicon.png" />
-        <link rel="shortcut icon" href="/assets/images/favicon.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/assets/images/favicon.png" />
+        <link rel="icon" type="image/png" sizes="32x32" href="https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/ej8wpdgrhkud76f3w6rio" />
+        <link rel="icon" type="image/png" sizes="16x16" href="https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/ej8wpdgrhkud76f3w6rio" />
+        <link rel="shortcut icon" href="https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/ej8wpdgrhkud76f3w6rio" />
+        <link rel="apple-touch-icon" sizes="180x180" href="https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/ej8wpdgrhkud76f3w6rio" />
         <meta name="theme-color" content="#ffffff" />
       </Head>
       <GestureHandlerRootView style={{ flex: 1 }}>
@@ -200,8 +200,8 @@ const styles = StyleSheet.create({
   },
   splashOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#fff',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
-  },
+  }
 });

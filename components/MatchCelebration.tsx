@@ -3,6 +3,7 @@ import { Animated, Dimensions, Easing, Platform, StyleSheet, Text, View, Image }
 import { PROMO_GRAPHICS } from '@/constants/promoGraphics';
 import * as Haptics from 'expo-haptics';
 import type { ComponentType } from 'react';
+import { DIAG } from '@/lib/diagnostics';
 
 export type CelebrationTheme = 'confetti' | 'hearts' | 'fireworks';
 
@@ -83,6 +84,7 @@ const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, in
         }
       } catch (e) {
         console.log('[MatchCelebration] unload sound error', e);
+        DIAG.push({ level: 'warn', scope: 'celebration', code: 'UNLOAD_SOUND_FAIL', message: 'Failed to unload sound', meta: { error: String(e) } });
       }
     };
   }, []);
@@ -91,6 +93,7 @@ const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, in
     if (!visible) return;
 
     const anims: Animated.CompositeAnimation[] = [];
+    DIAG.push({ level: 'info', scope: 'celebration', code: 'START', message: 'Celebration started', meta: { theme, intensity: clampedIntensity } });
 
     particles.forEach((p, idx) => {
       const angle = (Math.PI * 2 * idx) / particles.length + Math.random() * 0.7;
@@ -162,6 +165,7 @@ const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, in
                 if (s?.isLoaded && s?.didJustFinish) {
                   (boom as any).unloadAsync?.().catch(() => {});
                   soundRef.current = null;
+                  DIAG.push({ level: 'info', scope: 'celebration', code: 'BOOM_DONE', message: 'Boom sound finished' });
                 }
               });
               if (isHuge) {
@@ -187,11 +191,13 @@ const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, in
                     });
                   } catch (err) {
                     console.log('[MatchCelebration] pop sound error', err);
+                    DIAG.push({ level: 'warn', scope: 'celebration', code: 'POP_SOUND_FAIL', message: 'Pop sound failed', meta: { error: String(err) } });
                   }
                 }, 220);
               }
             } catch (nativeAudioErr) {
               console.log('[MatchCelebration] native audio init error', nativeAudioErr);
+              DIAG.push({ level: 'warn', scope: 'celebration', code: 'AUDIO_INIT_FAIL', message: 'Native audio init failed', meta: { error: String(nativeAudioErr) } });
             }
           } else {
             try {
@@ -204,7 +210,7 @@ const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, in
               boom.volume = Math.max(0.1, Math.min(1, volume));
               const p = boom.play();
               if (p && typeof (p as Promise<void>).catch === 'function') {
-                (p as Promise<void>).catch((e) => console.log('[MatchCelebration] web boom play blocked or failed', e));
+                (p as Promise<void>).catch((e) => { console.log('[MatchCelebration] web boom play blocked or failed', e); DIAG.push({ level: 'warn', scope: 'celebration', code: 'WEB_BOOM_PLAY_FAIL', message: 'Web boom play blocked/failed', meta: { error: String(e) } }); });
               }
               if (isHuge) {
                 setTimeout(() => {
@@ -217,7 +223,7 @@ const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, in
                     pop.volume = Math.max(0.1, Math.min(1, volume * 0.8));
                     const pp = pop.play();
                     if (pp && typeof (pp as Promise<void>).catch === 'function') {
-                      (pp as Promise<void>).catch((e) => console.log('[MatchCelebration] web pop play blocked or failed', e));
+                      (pp as Promise<void>).catch((e) => { console.log('[MatchCelebration] web pop play blocked or failed', e); DIAG.push({ level: 'warn', scope: 'celebration', code: 'WEB_POP_PLAY_FAIL', message: 'Web pop play blocked/failed', meta: { error: String(e) } }); });
                     }
                   } catch (er) {
                     console.log('[MatchCelebration] web pop sound error', er);
@@ -226,11 +232,13 @@ const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, in
               }
             } catch (err) {
               console.log('[MatchCelebration] web audio error', err);
+              DIAG.push({ level: 'warn', scope: 'celebration', code: 'WEB_AUDIO_ERR', message: 'Web audio error', meta: { error: String(err) } });
             }
           }
         }
       } catch (e) {
         console.log('[MatchCelebration] startEverything error', e);
+        DIAG.push({ level: 'error', scope: 'celebration', code: 'START_ERR', message: 'startEverything error', meta: { error: String(e) } });
       }
     };
 
@@ -250,6 +258,7 @@ const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, in
     ]);
 
     Animated.sequence([shockwave, showLabel, Animated.parallel(anims), hideLabel]).start(({ finished }) => {
+      if (finished) DIAG.push({ level: 'info', scope: 'celebration', code: 'ANIM_DONE', message: 'Celebration animation finished' });
       if (finished && onDone) onDone();
     });
   }, [visible, particles, duration, labelOpacity, labelY, onDone, vibrate, soundEnabled, volume, clampedIntensity, flashOpacity, ringOpacity, ringScale, soundBoomUrl, soundPopUrl]);

@@ -326,6 +326,7 @@ export default function VerifyPhotoScreen() {
       else if (currentExpr === 'smile') setCurrentExpr('sad');
       
       showToast(t('verification.captureSuccess') ?? 'Photo captured successfully!');
+      DIAG.push({ level: 'info', scope: 'verify', code: 'CAPTURE_SAVED', message: 'Saved capture to slot', meta: { expr: currentExpr } });
     } catch (e) {
       console.log('[VerifyPhoto] takeNow error', e);
       const errorMsg = e instanceof Error && e.message === 'Capture timeout' 
@@ -565,6 +566,7 @@ export default function VerifyPhotoScreen() {
                     if (currentExpr === 'neutral') setCurrentExpr('smile');
                     else if (currentExpr === 'smile') setCurrentExpr('sad');
                     showToast(t('verification.captureSuccess') ?? 'Photo captured successfully!');
+                    DIAG.push({ level: 'info', scope: 'verify', code: 'CAPTURE_SAVED', message: 'Saved capture to slot (manual)', meta: { expr: currentExpr } });
                   }
                 }
               }

@@ -5,7 +5,7 @@ import * as Haptics from 'expo-haptics';
 import type { ComponentType } from 'react';
 import { DIAG } from '@/lib/diagnostics';
 
-export type CelebrationTheme = 'confetti' | 'hearts' | 'fireworks';
+export type CelebrationTheme = 'confetti' | 'hearts' | 'fireworks' | 'boom';
 
 export interface MatchCelebrationProps {
   visible: boolean;
@@ -45,7 +45,7 @@ const SOUND_POP_WAV_FALLBACK = 'https://cdn.freesound.org/previews/341/341695_62
 const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, intensity = 1, theme = 'fireworks', message = "It's a Match!", volume = 0.9, soundEnabled = true, vibrate = true, lottieUrl, gifUrl, soundBoomUrl, soundPopUrl, burstMode = 'auto' }) => {
   const clampedIntensity = Math.max(0.05, Math.min(1, intensity));
   const targetCount = Math.max(24, Math.floor(140 * clampedIntensity));
-  const count = Math.min(80, targetCount);
+  const count = theme === 'boom' ? 0 : Math.min(80, targetCount);
   const duration = 900 + Math.floor(1300 * clampedIntensity);
 
   const particles = useMemo<Particle[]>(() => {
@@ -307,7 +307,7 @@ const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, in
       <Animated.View style={[styles.flash, { opacity: flashOpacity }]} />
       <Animated.View style={[styles.ring, { top: H / 2 - 40, left: W / 2 - 40, transform: [{ scale: ringScale }], opacity: ringOpacity }]} />
 
-      {shouldUseLottie ? (
+      {theme !== 'boom' && (shouldUseLottie ? (
         Platform.OS === 'web' ? (
           React.createElement(require('@lottiefiles/dotlottie-react').DotLottiePlayer, {
             src: lottieUrl,
@@ -326,11 +326,11 @@ const MatchCelebration: React.FC<MatchCelebrationProps> = ({ visible, onDone, in
             })
           ) : null
         )
-      ) : gifOverlay ? (
+      ) : (gifOverlay ? (
         <Image source={{ uri: gifOverlay }} style={{ position: 'absolute', top: H / 2 - burstHeight / 2, width: burstWidth, height: burstHeight }} testID={Platform.OS === 'web' ? 'gif-fireworks-web' : 'gif-fireworks'} />
-      ) : null}
+      ) : null))}
 
-      {particles.map((p, i) => {
+      {particles.length > 0 && particles.map((p, i) => {
         const transform = [{ translateX: p.x }, { translateY: p.y }, { rotate: p.rotate.interpolate({ inputRange: [0, 360], outputRange: ['0deg', '360deg'] }) }, { scale: p.scale }];
         const style = [styles.particle, { backgroundColor: p.kind === 'dot' ? p.color : 'transparent', width: p.size, height: p.size, opacity: p.opacity } as const];
         return (

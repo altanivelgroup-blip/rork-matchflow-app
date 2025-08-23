@@ -429,7 +429,7 @@ export default function GalleryScreen() {
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [tMap, setTMap] = useState<Record<string, { bio?: string; interests?: string[]; bioTranslated: boolean; interestsTranslated: boolean }>>({});
   const [matchModal, setMatchModal] = useState<{ visible: boolean; profile: MockProfile | null }>({ visible: false, profile: null });
-  const [celebration, setCelebration] = useState<{ visible: boolean; intensity: number; theme: 'confetti' | 'hearts' | 'fireworks'; message: string }>({ visible: false, intensity: 0.7, theme: 'hearts', message: "Boom! It's a Match!" });
+  const [celebration, setCelebration] = useState<{ visible: boolean; intensity: number; theme: 'confetti' | 'hearts' | 'fireworks' | 'boom'; message: string }>({ visible: false, intensity: 0.7, theme: 'hearts', message: "Boom! It's a Match!" });
   const [animationsEnabled, setAnimationsEnabled] = useState<boolean>(true);
   const [showUpgrade, setShowUpgrade] = useState<boolean>(false);
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
@@ -766,6 +766,10 @@ export default function GalleryScreen() {
           interests: [...profile.interests],
         });
         setMatchModal({ visible: true, profile });
+        const score = aiQuery.data?.scores?.find(s => s.id === profile.id)?.score ?? profile.aiCompatibilityScore ?? 90;
+        const intensity = Math.max(0.3, Math.min(1, score / 100));
+        setCelebration({ visible: true, intensity, theme: 'boom', message: `Boom! It's a Match with ${profile.name}!` });
+        setTimeout(() => setCelebration(c => ({ ...c, visible: false })), 2200);
         await analytics.track('match_mutual', { profileId: profile.id, country: profile.location?.city ?? 'unknown' });
       }
     } catch (e) {
@@ -970,7 +974,9 @@ export default function GalleryScreen() {
                 if (!p) return;
                 const score = aiScoresMap[p.id] ?? p.aiCompatibilityScore ?? 90;
                 setMatchModal({ visible: true, profile: p });
-                openCelebration(Math.max(85, score), p.name);
+                const intensity = Math.max(0.3, Math.min(1, Math.max(85, score) / 100));
+                setCelebration({ visible: true, intensity, theme: 'boom', message: `Boom! It's a Match with ${p.name}!` });
+                setTimeout(() => setCelebration(c => ({ ...c, visible: false })), 2200);
               } catch (e) {
                 console.log('[Gallery] test match trigger error', e);
               }
@@ -1204,7 +1210,9 @@ export default function GalleryScreen() {
                 <TouchableOpacity style={[styles.ctaButton, styles.chatButton, { flex: 1 }]} onPress={() => {
                   setPreviewProfile(null);
                   setMatchModal({ visible: true, profile: previewProfile });
-                  openCelebration(90, previewProfile.name);
+                  const intensity = Math.max(0.3, Math.min(1, 0.9));
+                  setCelebration({ visible: true, intensity, theme: 'boom', message: `Boom! It's a Match with ${previewProfile.name}!` });
+                  setTimeout(() => setCelebration(c => ({ ...c, visible: false })), 2200);
                 }} testID="preview-like">
                   <Heart size={18} color="#fff" fill="#fff" />
                   <Text style={[styles.ctaText, { color: '#fff', marginLeft: 8 }]}>Like</Text>

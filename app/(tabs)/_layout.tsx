@@ -1,4 +1,4 @@
-import { Tabs, useRouter } from "expo-router";
+import { Tabs, useRouter, useRootNavigationState } from "expo-router";
 import { Heart, MessageCircle, User, Settings as SettingsIcon, Grid3X3, Globe2 } from "lucide-react-native";
 import React, { useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -7,13 +7,19 @@ import { DIAG } from "@/lib/diagnostics";
 export default function TabLayout() {
   const { isAuthenticated } = useAuth();
   const router = useRouter();
+  const rootNavigationState = useRootNavigationState();
 
   useEffect(() => {
+    if (!rootNavigationState?.key) return;
     if (!isAuthenticated) {
       DIAG.push({ level: 'warn', code: 'NAV_GUARD', scope: 'tabs', message: 'Blocked unauthenticated access to tabs' });
       router.replace('/login' as any);
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, router, rootNavigationState?.key]);
+
+  if (!rootNavigationState?.key) {
+    return null;
+  }
 
   return (
     <Tabs
